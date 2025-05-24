@@ -159,27 +159,32 @@ class TaprootAssetManager:
                     # Parse JSON data
                     asset_data = json.loads(channel.custom_channel_data.decode('utf-8'))
                     
-                    # Process each asset in the channel
-                    for asset in asset_data.get("assets", []):
-                        asset_utxo = asset.get("asset_utxo", {})
-                        
-                        # Extract asset ID
-                        asset_id = ""
-                        if "asset_id" in asset_utxo:
-                            asset_id = asset_utxo["asset_id"]
-                        elif "asset_genesis" in asset_utxo and "asset_id" in asset_utxo["asset_genesis"]:
-                            asset_id = asset_utxo["asset_genesis"]["asset_id"]
-                        
-                        # Skip entries without asset ID
+                    # Handle newer litd/tapd format with local_assets and funding_assets
+                    local_assets = asset_data.get("local_assets", [])
+                    funding_assets = asset_data.get("funding_assets", [])
+                    
+                    # Get channel-level capacity and balance info
+                    channel_capacity = asset_data.get("capacity", 0)
+                    channel_local_balance = asset_data.get("local_balance", 0)
+                    channel_remote_balance = asset_data.get("remote_balance", 0)
+                    
+                    # Process local assets (newer format)
+                    for local_asset in local_assets:
+                        asset_id = local_asset.get("asset_id", "")
                         if not asset_id:
                             continue
                             
-                        # Extract name
+                        # Find corresponding funding asset for name and other details
+                        funding_asset = None
+                        for fa in funding_assets:
+                            if fa.get("asset_genesis", {}).get("asset_id") == asset_id:
+                                funding_asset = fa
+                                break
+                        
+                        # Extract name from funding asset
                         name = ""
-                        if "name" in asset_utxo:
-                            name = asset_utxo["name"]
-                        elif "asset_genesis" in asset_utxo and "name" in asset_utxo["asset_genesis"]:
-                            name = asset_utxo["asset_genesis"]["name"]
+                        if funding_asset:
+                            name = funding_asset.get("asset_genesis", {}).get("name", "")
                         
                         # Create asset info dictionary
                         asset_info = {
@@ -188,14 +193,53 @@ class TaprootAssetManager:
                             "channel_id": str(channel.chan_id),
                             "channel_point": channel.channel_point,
                             "remote_pubkey": channel.remote_pubkey,
-                            "capacity": asset.get("capacity", 0),
-                            "local_balance": asset.get("local_balance", 0),
-                            "remote_balance": asset.get("remote_balance", 0),
+                            "capacity": channel_capacity,
+                            "local_balance": local_asset.get("amount", 0),
+                            "remote_balance": channel_remote_balance,
                             "commitment_type": str(channel.commitment_type),
-                            "active": channel.active  # Include active status from channel
+                            "active": channel.active
                         }
                         
                         channel_assets.append(asset_info)
+                    
+                    # Fallback: Process legacy "assets" format if no local_assets found
+                    if not local_assets:
+                        for asset in asset_data.get("assets", []):
+                            asset_utxo = asset.get("asset_utxo", {})
+                            
+                            # Extract asset ID
+                            asset_id = ""
+                            if "asset_id" in asset_utxo:
+                                asset_id = asset_utxo["asset_id"]
+                            elif "asset_genesis" in asset_utxo and "asset_id" in asset_utxo["asset_genesis"]:
+                                asset_id = asset_utxo["asset_genesis"]["asset_id"]
+                            
+                            # Skip entries without asset ID
+                            if not asset_id:
+                                continue
+                                
+                            # Extract name
+                            name = ""
+                            if "name" in asset_utxo:
+                                name = asset_utxo["name"]
+                            elif "asset_genesis" in asset_utxo and "name" in asset_utxo["asset_genesis"]:
+                                name = asset_utxo["asset_genesis"]["name"]
+                            
+                            # Create asset info dictionary
+                            asset_info = {
+                                "asset_id": asset_id,
+                                "name": name,
+                                "channel_id": str(channel.chan_id),
+                                "channel_point": channel.channel_point,
+                                "remote_pubkey": channel.remote_pubkey,
+                                "capacity": asset.get("capacity", 0),
+                                "local_balance": asset.get("local_balance", 0),
+                                "remote_balance": asset.get("remote_balance", 0),
+                                "commitment_type": str(channel.commitment_type),
+                                "active": channel.active
+                            }
+                            
+                            channel_assets.append(asset_info)
                 except Exception as e:
                     logger.debug(f"Failed to process channel {channel.channel_point}: {e}")
                     continue
