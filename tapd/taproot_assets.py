@@ -159,9 +159,10 @@ class TaprootAssetManager:
                     # Parse JSON data
                     asset_data = json.loads(channel.custom_channel_data.decode('utf-8'))
                     
-                    # Handle newer litd/tapd format with local_assets and funding_assets
+                    # Handle newer litd/tapd format with local_assets, funding_assets, and remote_assets
                     local_assets = asset_data.get("local_assets", [])
                     funding_assets = asset_data.get("funding_assets", [])
+                    remote_assets = asset_data.get("remote_assets", [])
                     
                     # Get channel-level capacity and balance info
                     channel_capacity = asset_data.get("capacity", 0)
@@ -201,6 +202,40 @@ class TaprootAssetManager:
                         }
                         
                         channel_assets.append(asset_info)
+                    
+                    # Process funding assets if no local assets (this handles the current case)
+                    if not local_assets and funding_assets:
+                        for funding_asset in funding_assets:
+                            asset_genesis = funding_asset.get("asset_genesis", {})
+                            asset_id = asset_genesis.get("asset_id", "")
+                            if not asset_id:
+                                continue
+                            
+                            # Extract name from funding asset
+                            name = asset_genesis.get("name", "")
+                            
+                            # Find corresponding remote asset for balance info
+                            remote_balance = 0
+                            for remote_asset in remote_assets:
+                                if remote_asset.get("asset_id") == asset_id:
+                                    remote_balance = remote_asset.get("amount", 0)
+                                    break
+                            
+                            # Create asset info dictionary
+                            asset_info = {
+                                "asset_id": asset_id,
+                                "name": name,
+                                "channel_id": str(channel.chan_id),
+                                "channel_point": channel.channel_point,
+                                "remote_pubkey": channel.remote_pubkey,
+                                "capacity": channel_capacity,
+                                "local_balance": channel_local_balance,  # Use channel-level local balance
+                                "remote_balance": remote_balance,  # Use asset-specific remote balance
+                                "commitment_type": str(channel.commitment_type),
+                                "active": channel.active
+                            }
+                            
+                            channel_assets.append(asset_info)
                     
                     # Fallback: Process legacy "assets" format if no local_assets found
                     if not local_assets:
