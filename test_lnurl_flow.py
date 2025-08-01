@@ -14,7 +14,7 @@ import asyncio
 import sys
 from typing import Optional
 
-from lnbits.lnurl import decode as lnurl_decode
+from lnurl import decode as lnurl_decode
 import httpx
 
 

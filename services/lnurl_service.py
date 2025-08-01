@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 import httpx
 from loguru import logger
 
-from lnbits.lnurl import decode as lnurl_decode
+from lnurl import decode as lnurl_decode
 from lnbits.helpers import check_callback_url
 from lnbits.bolt11 import decode as bolt11_decode
 
