@@ -186,6 +186,7 @@ class ParsedInvoice(BaseModel):
     timestamp: int
     valid: bool
     asset_id: Optional[str] = None
+    destination: Optional[str] = None  # Destination node pubkey
 
 
 class LnurlPayRequest(BaseModel):

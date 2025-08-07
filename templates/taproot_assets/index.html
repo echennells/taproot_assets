@@ -77,6 +77,9 @@
                   <div v-if="asset.channel_info && asset.channel_info.capacity !== undefined && asset.channel_info.local_balance !== undefined" class="text-positive">
                     Max Receivable: {% raw %}{{ parseFloat(asset.channel_info.capacity) - parseFloat(asset.channel_info.local_balance) }}{% endraw %}
                   </div>
+                  <div v-if="asset.channel_info && asset.channel_info.peer_alias" class="text-grey-7" style="font-size: 0.85em;">
+                    Peer: {% raw %}{{ asset.channel_info.peer_alias }}{% endraw %}
+                  </div>
                 </div>
               </div>
             </div>
@@ -244,6 +247,8 @@
           dense
           v-model.number="invoiceDialog.form.amount"
           type="number"
+          inputmode="numeric"
+          pattern="[0-9]*"
           label="Amount"
           :rules="[val => val > 0 || 'Please enter an amount']"
           :hint="invoiceDialog.selectedAsset.channel_info && invoiceDialog.selectedAsset.channel_info.capacity !== undefined ? 'Max Receivable: ' + maxInvoiceAmount : ''"
