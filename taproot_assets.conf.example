@@ -6,43 +6,44 @@
 # ------------------
 # This extension supports two connection modes:
 #
-# 1. INTEGRATED MODE (Recommended for litd users)
-#    - Uses LNbits' existing connection to litd
-#    - No configuration file needed
-#    - Requires LNbits to be configured with LndGrpcWallet
-#    - Both LND and tapd calls go through the same litd instance
+# 1. INTEGRATED MODE (Lightning Terminal - LiT)
+#    - Extension connects directly to integrated Taproot Assets daemon
+#    - Requires this configuration file with specific settings
+#    - Taproot Assets runs on same gRPC port as LND (usually 10009)
+#    - Uses separate .tapd directory with its own macaroons
 #
-# 2. STANDALONE MODE (Using this config file)
-#    - Extension creates its own connections
-#    - Works with any LNbits wallet backend
-#    - Useful when running tapd separately or when LNbits uses REST
+# 2. STANDALONE MODE
+#    - Extension connects to separately running tapd instance
+#    - tapd runs on its own port (usually 10029)
+#    - Useful when running tapd as independent service
 
 # When to use this config file:
-# - You're running tapd as a separate service (not integrated in litd)
-# - LNbits is using REST mode (LndRestWallet) 
-# - You need different credentials for tapd vs LND
-# - You want explicit control over tapd connection settings
+# - ALWAYS when using Taproot Assets (both integrated and standalone)
+# - LNbits can use any wallet backend (LndRestWallet, LndGrpcWallet, etc.)
+# - Extension needs explicit connection details for Taproot Assets
 
 # Connection Settings
 # ------------------
 
 # TAPD host and port
-# For litd integrated mode: use gRPC port (usually 10009)
-# For standalone tapd: use tapd's gRPC port (usually 10029)
+# For Lightning Terminal (integrated): localhost:10009 (same as LND gRPC)
+# For standalone tapd: localhost:10029 (tapd's dedicated port)
+# IMPORTANT: Check with 'ss -ntlp' to see what ports are actually listening
 TAPD_HOST=127.0.0.1:10009
 
 # Network: mainnet, testnet, regtest, simnet, signet
+# Must match your Lightning node's network
 TAPD_NETWORK=mainnet
 
 # TLS Certificate Path
-# Local example: /home/ubuntu/.lnd/tls.cert
-# Docker example: /root/.lnd/tls.cert
-TAPD_TLS_CERT_PATH=/home/ubuntu/.lnd/tls.cert
+# For Lightning Terminal: Use LND's certificate (NOT LiT's certificate)
+# For standalone tapd: Use tapd's certificate
+TAPD_TLS_CERT_PATH=/home/user/.lnd/tls.cert
 
 # Taproot Assets Macaroon Path
-# Local example: /home/ubuntu/.tapd/data/mainnet/admin.macaroon
-# Docker example: /root/.tapd/data/mainnet/admin.macaroon
-TAPD_MACAROON_PATH=/home/ubuntu/.tapd/data/mainnet/admin.macaroon
+# Even with integrated Lightning Terminal, tapd creates its own .tapd directory
+# with network-specific macaroons. Do NOT use LiT's macaroon.
+TAPD_MACAROON_PATH=/home/user/.tapd/data/{network}/admin.macaroon
 
 # Optional: Use hex-encoded macaroon instead of file path
 # Useful for environments where file access is restricted
@@ -76,6 +77,6 @@ TAPD_DEFAULT_SAT_FEE=1
 
 # Environment Variables
 # --------------------
-# All settings can also be provided via environment variables.
+# All settings can also be provided via environment variables for containerized deployments.
 # Environment variables take precedence over this config file.
-# Prefix each setting with TAPD_ or LND_ as shown above.
+# Use the same names as shown above (e.g., TAPD_HOST, TAPD_NETWORK, etc.).

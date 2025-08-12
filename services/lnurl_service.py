@@ -6,7 +6,11 @@ from typing import Dict, Any, Optional
 import httpx
 from loguru import logger
 
-from lnurl import decode as lnurl_decode
+try:
+    from lnurl import url_decode as lnurl_decode
+except ImportError:
+    # Fallback for newer versions of lnurl package
+    from lnurl import decode as lnurl_decode
 from lnbits.helpers import check_callback_url
 from lnbits.bolt11 import decode as bolt11_decode
 

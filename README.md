@@ -14,15 +14,57 @@ A powerful extension for LNbits that enables Taproot Assets functionality, allow
 
 - LNbits instance
 - Access to a Taproot Assets daemon (tapd) either:
-  - Integrated within litd (recommended)
+  - Integrated within [Lightning Terminal (litd)](https://github.com/lightninglabs/lightning-terminal) (recommended - bundles LND, Loop, Pool, Faraday, and Taproot Assets)
   - Running as a standalone service
-- Proper credentials (TLS certificate and macaroons)
 
 ## Installation
 
-1. Enable the extension in LNbits Admin UI or add to `LNBITS_EXTENSIONS_DEFAULT_INSTALL`
-2. Configure the connection (see Configuration section)
-3. Restart LNbits if necessary
+1. Clone this extension into your LNbits extensions directory:
+   ```bash
+   cd /path/to/lnbits/lnbits/extensions
+   git clone https://github.com/echennells/taproot_assets.git
+   ```
+2. **Install Required gRPC Protocol Files** (see below)
+3. Configure the connection settings (see Configuration section)
+4. Restart LNbits
+
+**For Docker deployments:** See [mutinynet-litd-lnbits](https://github.com/echennells/mutinynet-litd-lnbits) for a complete Docker Compose configuration example with Lightning Terminal and LNbits.
+
+### Installing gRPC Protocol Files
+
+This extension requires gRPC protocol buffer files for communication with LND and Taproot Assets daemon. These files are provided as compressed archives in the extension directory.
+
+**Why these files are needed:** The gRPC files that ship with LNbits core don't include Taproot Assets support. These archives contain the updated protocol buffers with full Taproot Assets functionality.
+
+**Method 1: Extract to LNbits wallets directory**
+```bash
+# Navigate to your LNbits root directory
+cd /path/to/lnbits
+
+# Extract LND gRPC files (if not already present)
+tar -xzf lnbits/extensions/taproot_assets/lnd_grpc_files.tar.gz
+
+# Extract Taproot Assets gRPC files
+tar -xzf lnbits/extensions/taproot_assets/tapd_grpc_files.tar.gz
+```
+
+**Method 2: For Docker deployments**
+Add extraction commands to your Dockerfile or entrypoint script:
+```dockerfile
+# Extract gRPC files during container build
+RUN tar -xzf /app/lnbits/extensions/taproot_assets/lnd_grpc_files.tar.gz -C /app/
+RUN tar -xzf /app/lnbits/extensions/taproot_assets/tapd_grpc_files.tar.gz -C /app/
+```
+
+**What these files provide:**
+- `lnd_grpc_files.tar.gz`: Contains LND protocol buffers (lightning_pb2.py, invoices_pb2.py, router_pb2.py, etc.)
+- `tapd_grpc_files.tar.gz`: Contains Taproot Assets protocol buffers (taprootassets_pb2.py, assetwallet_pb2.py, rfq_pb2.py, etc.)
+
+These files enable the extension to communicate with:
+- LND via gRPC (for Lightning network operations)
+- Taproot Assets daemon via gRPC (for asset operations)
+- RFQ (Request for Quote) services for asset trading
+- Asset wallet operations for advanced asset management
 
 ## Configuration
 
@@ -112,6 +154,11 @@ environment:
 - Verify all required services are running
 - Ensure credentials have proper permissions
 
+### "ModuleNotFoundError" or gRPC import errors
+- Make sure you've extracted the gRPC protocol buffer files (see [Installing gRPC Protocol Files](#installing-grpc-protocol-files))
+- The `lnd_grpc_files.tar.gz` and `tapd_grpc_files.tar.gz` must be extracted to the LNbits root directory
+- These files provide the Python protocol buffer definitions needed for gRPC communication
+
 ## API Endpoints
 
 - `GET /taproot_assets/api/v1/taproot/listassets` - List all assets
@@ -145,12 +192,6 @@ taproot_assets/
 └── static/               # Frontend assets
 ```
 
-### Adding New Features
-1. Add gRPC calls in appropriate `tapd/` module
-2. Create API endpoint in `views_api.py`
-3. Update frontend in `static/js/`
-4. Add WebSocket events if real-time updates needed
-
 ## License
 
-This extension is part of LNbits and follows the same MIT license.
+MIT license

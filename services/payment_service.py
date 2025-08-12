@@ -269,16 +269,36 @@ class PaymentService:
                 log_debug(PAYMENT, "No asset ID available from client or invoice")
                 asset_id_to_use = None
                 
-            # RFQ Debug: Get channel state before payment
+            # Check Bitcoin balance before attempting payment
             try:
-                # Get channel balances before payment
-                from ..tapd.taproot_adapter import lightning_pb2_grpc
-                ln_stub = lightning_pb2_grpc.LightningStub(taproot_wallet.node.channel)
-                channels_before = await ln_stub.ListChannels(lightning_pb2.ListChannelsRequest())
+                # Get channel balances before payment using existing Lightning stub
+                channels_before = await taproot_wallet.node.ln_stub.ListChannels(lightning_pb2.ListChannelsRequest())
                 log_info(PAYMENT, f"RFQ_DEBUG: Channels before payment: {len(channels_before.channels)} channels")
+                
+                # Check if we have sufficient Bitcoin balance for Lightning routing
+                total_local_balance = 0
+                total_local_reserve = 0
+                min_htlc_amount = 0
                 for ch in channels_before.channels:
                     if ch.active:
                         log_info(PAYMENT, f"RFQ_DEBUG: Channel {ch.channel_point[:30]}... - Local: {ch.local_balance}, Remote: {ch.remote_balance}")
+                        total_local_balance += ch.local_balance
+                        total_local_reserve += ch.local_constraints.chan_reserve_sat
+                        # Use dust limit as minimum for Taproot Asset payments (354 sats)
+                        min_htlc_amount = max(min_htlc_amount, ch.local_constraints.dust_limit_sat)
+                
+                # Check if we have enough Bitcoin balance above reserves + minimum payment amount
+                # Use higher threshold (5500 sats) for Taproot Asset payments due to anchor channels and routing requirements
+                required_balance = max(total_local_reserve + min_htlc_amount, 5500)
+                if total_local_balance <= required_balance:
+                    raise HTTPException(
+                        status_code=HTTPStatus.BAD_REQUEST,
+                        detail="Insufficient Bitcoin balance for Lightning routing"
+                    )
+                    
+            except HTTPException:
+                # Re-raise HTTP exceptions
+                raise
             except Exception as e:
                 log_warning(PAYMENT, f"RFQ_DEBUG: Could not get channel state before: {e}")
             
@@ -342,7 +362,7 @@ class PaymentService:
             
             # RFQ Debug: Get channel state after payment
             try:
-                channels_after = await ln_stub.ListChannels(lightning_pb2.ListChannelsRequest())
+                channels_after = await taproot_wallet.node.ln_stub.ListChannels(lightning_pb2.ListChannelsRequest())
                 log_info(PAYMENT, f"RFQ_DEBUG: Channels after payment: {len(channels_after.channels)} channels")
                 for ch in channels_after.channels:
                     if ch.active:
