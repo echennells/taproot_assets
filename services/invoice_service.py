@@ -78,11 +78,16 @@ class InvoiceService:
                 # Get user's assets
                 assets = await AssetService.list_assets(wallet_info)
                 
-                # Find the asset with a channel
+                # Find the asset with an active channel
                 for asset in assets:
                     if asset.get("asset_id") == data.asset_id and asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
+                        # Skip inactive channels
+                        if not asset["channel_info"].get("active", True):
+                            logger.info(f"[{API}] Skipping inactive channel")
+                            continue
+                        
                         peer_pubkey = asset["channel_info"]["peer_pubkey"]
-                        logger.info(f"[{API}] Found asset channel with peer {peer_pubkey[:16]}...")
+                        logger.info(f"[{API}] Found active asset channel with peer {peer_pubkey[:16]}...")
                         break
                 
                 if peer_pubkey is None:

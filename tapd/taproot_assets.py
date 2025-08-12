@@ -29,6 +29,41 @@ class TaprootAssetManager:
             node: The TaprootAssetsNodeExtension instance
         """
         self.node = node
+        self.node_alias_cache = {}  # Cache for node aliases
+
+    async def get_node_alias(self, pubkey: str) -> str:
+        """
+        Get the alias/name for a node given its pubkey.
+        
+        Args:
+            pubkey: The node's public key
+            
+        Returns:
+            str: The node's alias/name, or truncated pubkey if not found
+        """
+        # Check cache first
+        if pubkey in self.node_alias_cache:
+            return self.node_alias_cache[pubkey]
+        
+        try:
+            # Use Lightning RPC to get node info
+            request = lightning_pb2.NodeInfoRequest(
+                pub_key=pubkey,
+                include_channels=False
+            )
+            response = await self.node.ln_stub.GetNodeInfo(request)
+            
+            if response and response.node and response.node.alias:
+                alias = response.node.alias
+                self.node_alias_cache[pubkey] = alias
+                return alias
+        except Exception as e:
+            logger.debug(f"Could not get node alias for {pubkey[:16]}...: {e}")
+        
+        # Fallback to truncated pubkey
+        fallback = f"{pubkey[:16]}..."
+        self.node_alias_cache[pubkey] = fallback
+        return fallback
 
     async def list_assets(self, force_refresh=False) -> List[Dict[str, Any]]:
         """
@@ -107,12 +142,18 @@ class TaprootAssetManager:
                 # Add each channel as a separate asset entry
                 for channel in channels:
                     asset_with_channel = base_asset.copy()
+                    
+                    # Get node alias for the peer
+                    peer_pubkey = channel["remote_pubkey"]
+                    peer_alias = await self.get_node_alias(peer_pubkey)
+                    
                     asset_with_channel["channel_info"] = {
                         "channel_point": channel["channel_point"],
                         "capacity": channel["capacity"],
                         "local_balance": channel["local_balance"],
                         "remote_balance": channel["remote_balance"],
-                        "peer_pubkey": channel["remote_pubkey"],
+                        "peer_pubkey": peer_pubkey,
+                        "peer_alias": peer_alias,  # Add human-readable node name
                         "channel_id": channel["channel_id"],
                         "active": channel.get("active", True)  # Add active status
                     }

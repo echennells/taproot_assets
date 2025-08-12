@@ -144,10 +144,7 @@ const PaymentService = {
         asset_id: assetData.asset_id  // Explicitly send the selected asset ID
       };
       
-      // Add peer_pubkey if available
-      if (assetData?.channel_info?.peer_pubkey) {
-        payload.peer_pubkey = assetData.channel_info.peer_pubkey;
-      }
+      // Don't send peer_pubkey - let the backend auto-select based on invoice destination
       
       // Make the payment request
       const response = await ApiService.payInvoice(wallet.adminkey, payload);

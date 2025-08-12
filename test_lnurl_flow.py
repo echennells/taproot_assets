@@ -14,7 +14,11 @@ import asyncio
 import sys
 from typing import Optional
 
-from lnurl import url_decode as lnurl_decode
+try:
+    from lnurl import url_decode as lnurl_decode
+except ImportError:
+    # Fallback for newer versions of lnurl package
+    from lnurl import decode as lnurl_decode
 import httpx
 
 

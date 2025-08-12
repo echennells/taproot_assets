@@ -302,14 +302,60 @@ class PaymentService:
             except Exception as e:
                 log_warning(PAYMENT, f"RFQ_DEBUG: Could not get channel state before: {e}")
             
+            # Smart peer selection: If no peer specified, try to find the right one
+            peer_to_use = data.peer_pubkey
+            if asset_id_to_use and not peer_to_use:
+                # Get the destination node from the parsed invoice
+                destination_node = parsed_invoice.destination if hasattr(parsed_invoice, 'destination') and parsed_invoice.destination else None
+                
+                if destination_node:
+                    log_info(PAYMENT, f"Invoice destination node: {destination_node[:16]}...")
+                    
+                    # Get assets to find matching peer
+                    from .asset_service import AssetService
+                    from lnbits.core.models import WalletTypeInfo, Wallet
+                    from lnbits.core.models.wallets import KeyType
+                    wallet_obj = Wallet(id=wallet.wallet.id, user=wallet.wallet.user, adminkey="", inkey="", balance_msat=0, name="")
+                    wallet_info = WalletTypeInfo(key_type=KeyType.admin, wallet=wallet_obj)
+                    assets = await AssetService.list_assets(wallet_info)
+                    
+                    # Find a channel with matching asset_id and destination peer
+                    for asset in assets:
+                        if (asset.get("asset_id") == asset_id_to_use and 
+                            asset.get("channel_info") and 
+                            asset["channel_info"].get("peer_pubkey")):
+                            
+                            channel_peer = asset["channel_info"]["peer_pubkey"]
+                            if channel_peer == destination_node:
+                                peer_to_use = channel_peer
+                                peer_alias = asset["channel_info"].get("peer_alias", f"{peer_to_use[:16]}...")
+                                log_info(PAYMENT, f"Auto-selected matching peer {peer_alias} for payment")
+                                break
+                    
+                    # If no exact match found, use any available channel for this asset
+                    if not peer_to_use:
+                        log_warning(PAYMENT, f"No channel found for destination {destination_node[:16]}..., will try any available channel")
+                        for asset in assets:
+                            if (asset.get("asset_id") == asset_id_to_use and 
+                                asset.get("channel_info") and 
+                                asset["channel_info"].get("peer_pubkey") and
+                                asset["channel_info"].get("active", True)):
+                                
+                                peer_to_use = asset["channel_info"]["peer_pubkey"]
+                                peer_alias = asset["channel_info"].get("peer_alias", f"{peer_to_use[:16]}...")
+                                log_info(PAYMENT, f"Using available peer {peer_alias} for payment (no exact match)")
+                                break
+                else:
+                    log_warning(PAYMENT, f"No destination node in invoice, using any available channel")
+            
             # Make the payment using the low-level wallet method
             # This only handles the direct node communication
-            log_info(PAYMENT, f"Making external payment, fee_limit_sats={fee_limit_sats}, invoice_amount={parsed_invoice.amount}")
+            log_info(PAYMENT, f"Making external payment, fee_limit_sats={fee_limit_sats}, invoice_amount={parsed_invoice.amount}, peer={peer_to_use[:16] if peer_to_use else 'auto'}")
             payment_result = await taproot_wallet.send_raw_payment(
                 payment_request=data.payment_request,
                 fee_limit_sats=fee_limit_sats,
                 asset_id=asset_id_to_use,
-                peer_pubkey=data.peer_pubkey
+                peer_pubkey=peer_to_use
             )
             
             log_info(PAYMENT, f"Raw payment result: {payment_result}")
@@ -458,6 +504,12 @@ class PaymentService:
                 log_error(API, error_msg)
                 raise Exception(error_msg)
             
+            # Extract destination node if available
+            destination = None
+            if hasattr(decoded, 'payee') and decoded.payee:
+                destination = decoded.payee
+                log_info(API, f"Extracted destination node from invoice: {destination[:16]}...")
+            
             # Create and return the parsed invoice
             return ParsedInvoice(
                 payment_hash=decoded.payment_hash,
@@ -466,7 +518,8 @@ class PaymentService:
                 expiry=decoded.expiry if hasattr(decoded, "expiry") else 3600,
                 timestamp=decoded.date,
                 valid=True,
-                asset_id=asset_id
+                asset_id=asset_id,
+                destination=destination
             )
     
     @staticmethod
