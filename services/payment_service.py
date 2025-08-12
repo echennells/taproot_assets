@@ -288,7 +288,8 @@ class PaymentService:
                         min_htlc_amount = max(min_htlc_amount, ch.local_constraints.dust_limit_sat)
                 
                 # Check if we have enough Bitcoin balance above reserves + minimum payment amount
-                required_balance = total_local_reserve + min_htlc_amount
+                # Use higher threshold (5500 sats) for Taproot Asset payments due to anchor channels and routing requirements
+                required_balance = max(total_local_reserve + min_htlc_amount, 5500)
                 if total_local_balance <= required_balance:
                     raise HTTPException(
                         status_code=HTTPStatus.BAD_REQUEST,
