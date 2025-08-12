@@ -104,7 +104,7 @@ async def api_parse_invoice(
                 
                 # Get the invoice from LNURL callback
                 import httpx
-                from lnbits.lnurl import decode as lnurl_decode
+                from lnurl import url_decode as lnurl_decode
                 from lnbits.helpers import check_callback_url
                 
                 # Decode LNURL to get URL
