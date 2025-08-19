@@ -221,9 +221,9 @@ class TaprootAssetsNodeExtension(Node):
                     with open(cert_path, 'rb') as f:
                         self.cert = f.read()
                     
-                    # Load LND macaroon (works for both gRPC and REST)
+                    # Load LND macaroon for LND operations
                     from lnbits.wallets.macaroon import load_macaroon
-                    macaroon = (
+                    lnd_macaroon = (
                         getattr(lnbits_settings, 'lnd_grpc_macaroon', None)
                         or getattr(lnbits_settings, 'lnd_grpc_admin_macaroon', None)
                         or getattr(lnbits_settings, 'lnd_rest_macaroon', None)
@@ -231,16 +231,39 @@ class TaprootAssetsNodeExtension(Node):
                     )
                     encrypted_macaroon = getattr(lnbits_settings, 'lnd_grpc_macaroon_encrypted', None)
                     
-                    if macaroon:
-                        macaroon_bytes = load_macaroon(macaroon, encrypted_macaroon)
-                        # Process macaroon
-                        # load_macaroon returns hex string in gRPC mode, bytes in REST mode
-                        if isinstance(macaroon_bytes, bytes):
-                            self.macaroon = macaroon_bytes.hex()
+                    if lnd_macaroon:
+                        lnd_macaroon_bytes = load_macaroon(lnd_macaroon, encrypted_macaroon)
+                        # Process LND macaroon
+                        if isinstance(lnd_macaroon_bytes, bytes):
+                            self.ln_macaroon = lnd_macaroon_bytes.hex()
                         else:
-                            self.macaroon = macaroon_bytes
-                        self.ln_macaroon = self.macaroon  # Use same macaroon for both
-                        # Macaroon loaded
+                            self.ln_macaroon = lnd_macaroon_bytes
+                        
+                        # For litd integrated mode, tapd macaroon must be explicitly configured
+                        from ..tapd_settings import taproot_settings
+                        tapd_macaroon_path = taproot_settings.tapd_macaroon_path
+                        tapd_macaroon_hex = taproot_settings.tapd_macaroon_hex
+                        
+                        if tapd_macaroon_hex:
+                            # Use hex macaroon if provided
+                            self.macaroon = tapd_macaroon_hex
+                            log_info(NODE, "Using TAPD_MACAROON_HEX for tapd authentication")
+                        elif tapd_macaroon_path and os.path.exists(tapd_macaroon_path):
+                            # Use tapd macaroon from specified path
+                            with open(tapd_macaroon_path, 'rb') as f:
+                                self.macaroon = f.read().hex()
+                            log_info(NODE, f"Using tapd macaroon from {tapd_macaroon_path}")
+                        else:
+                            # No tapd macaroon configured for integrated mode
+                            log_error(NODE, "litd integrated mode detected but TAPD_MACAROON_PATH not set")
+                            raise TaprootAssetError(
+                                "litd integrated mode requires TAPD_MACAROON_PATH\n\n"
+                                "When using litd (Lightning Terminal), you must set:\n"
+                                "  TAPD_MACAROON_PATH=/path/to/.tapd/data/[network]/admin.macaroon\n\n"
+                                "Example for Docker:\n"
+                                "  TAPD_MACAROON_PATH=/root/.tapd/data/mainnet/admin.macaroon"
+                            )
+                        
                         self.use_litd_integrated = True
                         log_info(NODE, f"Configured for litd integrated mode at {self.host}")
                         return
