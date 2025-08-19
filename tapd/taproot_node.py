@@ -189,26 +189,45 @@ class TaprootAssetsNodeExtension(Node):
     def _try_litd_integrated_mode(self, lnbits_settings):
         """Try to configure for litd integrated mode using LNbits LND settings."""
         try:
-            # Check if we have LND gRPC settings configured
+            # Check if we have LND settings configured (either gRPC or REST)
+            lnd_endpoint = None
+            cert_path = None
+            
+            # First check for gRPC settings
             if hasattr(lnbits_settings, 'lnd_grpc_endpoint') and lnbits_settings.lnd_grpc_endpoint:
-                log_info(NODE, "Attempting to use litd integrated mode via LND settings")
+                log_info(NODE, "Attempting to use litd integrated mode via LND gRPC settings")
+                lnd_endpoint = lnbits_settings.lnd_grpc_endpoint
+                self.host = f"{lnd_endpoint}:{getattr(lnbits_settings, 'lnd_grpc_port', 10009)}"
+                cert_path = getattr(lnbits_settings, 'lnd_grpc_cert', None) or getattr(lnbits_settings, 'lnd_cert', None)
                 
-                # Use LND settings for litd connection
-                self.host = f"{lnbits_settings.lnd_grpc_endpoint}:{lnbits_settings.lnd_grpc_port}"
+            # Also check for REST settings that might indicate litd
+            elif hasattr(lnbits_settings, 'lnd_rest_endpoint') and lnbits_settings.lnd_rest_endpoint:
+                # Extract host from REST endpoint (e.g., "https://lit:8080" -> "lit")
+                import re
+                match = re.match(r'https?://([^:]+)', lnbits_settings.lnd_rest_endpoint)
+                if match:
+                    host = match.group(1)
+                    log_info(NODE, f"Detected LND REST endpoint, checking if litd at {host}:10009")
+                    # For litd, tapd is always on port 10009 (gRPC)
+                    self.host = f"{host}:10009"
+                    cert_path = getattr(lnbits_settings, 'lnd_rest_cert', None)
+                    lnd_endpoint = host
+                
+            if lnd_endpoint and cert_path:
                 self.network = "mainnet"  # Will be determined from node info
                 
-                # Try to use LND certificate and macaroon
-                cert_path = lnbits_settings.lnd_grpc_cert or lnbits_settings.lnd_cert
+                # Try to use the certificate
                 if cert_path and os.path.exists(cert_path):
                     with open(cert_path, 'rb') as f:
                         self.cert = f.read()
                     
-                    # Load LND macaroon
+                    # Load LND macaroon (works for both gRPC and REST)
                     from lnbits.wallets.macaroon import load_macaroon
                     macaroon = (
-                        lnbits_settings.lnd_grpc_macaroon
-                        or lnbits_settings.lnd_grpc_admin_macaroon
-                        or lnbits_settings.lnd_admin_macaroon
+                        getattr(lnbits_settings, 'lnd_grpc_macaroon', None)
+                        or getattr(lnbits_settings, 'lnd_grpc_admin_macaroon', None)
+                        or getattr(lnbits_settings, 'lnd_rest_macaroon', None)
+                        or getattr(lnbits_settings, 'lnd_admin_macaroon', None)
                     )
                     encrypted_macaroon = getattr(lnbits_settings, 'lnd_grpc_macaroon_encrypted', None)
                     
@@ -237,10 +256,13 @@ class TaprootAssetsNodeExtension(Node):
         if not tls_cert_path or not (macaroon_path or tapd_macaroon_hex):
             raise TaprootAssetError(
                 "Failed to connect to Taproot Assets daemon\n\n"
-                "The extension tried to connect via litd integrated mode but the connection failed.\n\n"
-                "If you're running tapd separately, create a configuration file:\n"
-                "- Copy taproot_assets.conf.example to taproot_assets.conf\n"
-                "- Update TAPD_HOST, TAPD_TLS_CERT_PATH, and TAPD_MACAROON_PATH\n\n"
+                "No valid configuration found. Please provide either:\n\n"
+                "1. For litd integrated mode:\n"
+                "   - Ensure LNbits is configured with gRPC (not REST) to auto-detect litd\n"
+                "   - OR set TAPD_MODE=integrated with proper TAPD_* variables\n\n"
+                "2. For standalone tapd mode:\n"
+                "   - Set environment variables: TAPD_HOST, TAPD_TLS_CERT_PATH, TAPD_MACAROON_PATH\n"
+                "   - OR create taproot_assets.conf from the example file\n\n"
                 "See documentation for setup instructions."
             )
         
