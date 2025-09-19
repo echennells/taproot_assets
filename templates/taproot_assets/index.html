@@ -74,8 +74,8 @@
               <div class="row q-col-gutter-md">
                 <div class="col-12">
                   <div>Balance: {% raw %}{{ asset.user_balance || 0 }}{% endraw %}</div>
-                  <div v-if="asset.channel_info && asset.channel_info.capacity !== undefined && asset.channel_info.local_balance !== undefined" class="text-positive">
-                    Max Receivable: {% raw %}{{ parseFloat(asset.channel_info.capacity) - parseFloat(asset.channel_info.local_balance) }}{% endraw %}
+                  <div v-if="asset.channel_info && asset.channel_info.capacity !== undefined" class="text-positive">
+                    Max Receivable: {% raw %}{{ parseFloat(asset.channel_info.capacity) - parseFloat(asset.user_balance || 0) }}{% endraw %}
                   </div>
                   <div v-if="asset.channel_info && asset.channel_info.peer_alias" class="text-grey-7" style="font-size: 0.85em;">
                     Peer: {% raw %}{{ asset.channel_info.peer_alias }}{% endraw %}
