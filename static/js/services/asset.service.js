@@ -173,15 +173,13 @@ const AssetService = {
    */
   getMaxReceivableAmount(asset) {
     if (!asset || !asset.channel_info) return 0;
-    
+
     const channelInfo = asset.channel_info;
-    // Fix for zero balance channels - check if capacity and local_balance are defined (not just truthy)
-    if (channelInfo.capacity !== undefined && channelInfo.local_balance !== undefined) {
-      const totalCapacity = parseFloat(channelInfo.capacity);
-      const localBalance = parseFloat(channelInfo.local_balance);
-      return totalCapacity - localBalance;
+    // The max receivable is simply the remote balance (what the peer has that they can send to us)
+    if (channelInfo.remote_balance !== undefined) {
+      return parseFloat(channelInfo.remote_balance);
     }
-    
+
     return 0;
   },
   

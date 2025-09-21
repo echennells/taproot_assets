@@ -55,8 +55,8 @@ class AssetService:
                 wallet_id=wallet.wallet.id
             )
 
-            # Get assets from tapd - specify that we want to use cache by default
-            assets_data = await taproot_wallet.node.asset_manager.list_assets(force_refresh=False)
+            # Get assets from tapd - force refresh to ensure we have latest channel balances
+            assets_data = await taproot_wallet.node.asset_manager.list_assets(force_refresh=True)
             
             # Get user information
             user = await get_user(wallet.wallet.user)
