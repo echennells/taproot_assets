@@ -31,11 +31,15 @@ async def api_parse_invoice(
 ):
     """
     Parse a BOLT11 payment request or LNURL to extract invoice details for Taproot Assets.
-    
+
     If an LNURL is provided, it will fetch the invoice and parse it as a taproot asset invoice.
     """
     log_debug(API, f"Parsing payment request for wallet {wallet.wallet.id}")
-    
+
+    # Strip lightning: prefix if present
+    if payment_request.lower().startswith("lightning:"):
+        payment_request = payment_request[10:]
+
     # Check if this is an LNURL (starts with "lnurl" case-insensitive)
     if payment_request.lower().startswith("lnurl"):
         log_info(API, "Detected LNURL, processing as taproot asset payment")
@@ -278,6 +282,11 @@ async def api_get_asset_transactions(
     return await AssetService.get_asset_transactions(wallet, asset_id, limit)
 
 
+def clean_lnurl(lnurl_string: str) -> str:
+    """Clean LNURL by removing lightning: prefix if present."""
+    return lnurl_string.replace('lightning:', '') if lnurl_string.startswith('lightning:') else lnurl_string
+
+
 @taproot_assets_api_router.post("/lnurl/info", status_code=HTTPStatus.OK)
 @handle_api_error
 async def api_lnurl_info(
@@ -288,7 +297,8 @@ async def api_lnurl_info(
     Get information about an LNURL pay link, including asset support.
     """
     log_info(API, f"Getting LNURL info for wallet {wallet.wallet.id}")
-    return await LnurlService.check_lnurl_asset_support(data.lnurl)
+    clean_lnurl_string = clean_lnurl(data.lnurl)
+    return await LnurlService.check_lnurl_asset_support(clean_lnurl_string)
 
 
 @taproot_assets_api_router.get("/rate/{asset_id}", status_code=HTTPStatus.OK)
@@ -388,10 +398,11 @@ async def api_lnurl_pay(
     4. Pays the invoice using the Taproot Assets payment service
     """
     log_info(API, f"Processing LNURL payment for wallet {wallet.wallet.id}, amount={data.amount_msat} msat")
-    
-    # Process the LNURL payment
+
+    # Clean LNURL and process the payment
+    clean_lnurl_string = clean_lnurl(data.lnurl)
     payment_response = await LnurlService.pay_lnurl(
-        lnurl_string=data.lnurl,
+        lnurl_string=clean_lnurl_string,
         amount_msat=data.amount_msat,
         wallet_info=wallet,
         comment=data.comment,
