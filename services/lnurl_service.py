@@ -121,14 +121,10 @@ class LnurlService:
                 if comment and comment_allowed > 0:
                     callback_params["comment"] = comment
                 
-                # If this LNURL accepts assets and we have an asset_id, include it
-                if asset_id and lnurl_params.get("acceptsAssets"):
-                    accepted_assets = lnurl_params.get("acceptedAssetIds", [])
-                    if asset_id in accepted_assets:
-                        callback_params["asset_id"] = asset_id
-                        log_info(PAYMENT, f"Including asset_id {asset_id} in LNURL callback")
-                    else:
-                        log_warning(PAYMENT, f"Asset {asset_id} not in accepted list: {accepted_assets}")
+                # If we have an asset_id, include it - RFQ provider will determine acceptance
+                if asset_id:
+                    callback_params["asset_id"] = asset_id
+                    log_info(PAYMENT, f"Including asset_id {asset_id} in LNURL callback")
                 
                 # Make the callback request
                 async with httpx.AsyncClient() as client:
@@ -221,23 +217,45 @@ class LnurlService:
         """
         try:
             lnurl_params = await cls.parse_lnurl(lnurl_string)
-            
+
             # Log the full response for debugging
             log_debug(API, f"LNURL params received: {lnurl_params}")
-            
+
+            # Parse callback URL for asset support information
+            callback_url = lnurl_params.get("callback", "")
+            supports_assets = False
+            accepted_asset_ids = []
+
+            if callback_url and "supports_assets=true" in callback_url:
+                supports_assets = True
+                log_info(API, f"Detected asset support in callback URL: {callback_url}")
+
+                # Extract asset IDs from URL parameters
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    parsed_url = urlparse(callback_url)
+                    query_params = parse_qs(parsed_url.query)
+
+                    if "asset_ids" in query_params:
+                        asset_ids_str = query_params["asset_ids"][0]
+                        accepted_asset_ids = asset_ids_str.split("|") if asset_ids_str else []
+                        log_info(API, f"Parsed asset IDs from callback URL: {accepted_asset_ids}")
+                except Exception as e:
+                    log_warning(API, f"Failed to parse asset IDs from callback URL: {e}")
+
             result = {
-                "supports_assets": lnurl_params.get("acceptsAssets", False),
-                "accepted_asset_ids": lnurl_params.get("acceptedAssetIds", []),
+                "supports_assets": supports_assets,
+                "accepted_asset_ids": accepted_asset_ids,
                 "asset_metadata": lnurl_params.get("assetMetadata", {}),
                 "min_sendable": lnurl_params.get("minSendable", 0),
                 "max_sendable": lnurl_params.get("maxSendable", 0),
                 "comment_allowed": lnurl_params.get("commentAllowed", 0),
                 "description": lnurl_params.get("metadata", ""),
-                "callback": lnurl_params.get("callback", "")
+                "callback": callback_url
             }
-            
+
             log_info(API, f"LNURL asset support: supports_assets={result['supports_assets']}, accepted_ids={result['accepted_asset_ids']}")
-            
+
             return result
         except Exception as e:
             log_error(API, f"Failed to check LNURL asset support: {str(e)}")

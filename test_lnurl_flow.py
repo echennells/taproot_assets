@@ -49,12 +49,26 @@ async def test_lnurl_flow(lnurl_string: str, amount_sats: int, asset_id: Optiona
             print(f"- Callback: {data.get('callback')}")
             print(f"- Comment allowed: {data.get('commentAllowed', 0)}")
             
-            # Check for asset support
-            if data.get('acceptsAssets'):
-                print(f"\n✅ This LNURL accepts Taproot Assets!")
-                print(f"Accepted assets: {data.get('acceptedAssetIds', [])}")
-                if data.get('assetMetadata'):
-                    print(f"Asset metadata: {data.get('assetMetadata')}")
+            # Check for asset support in callback URL
+            callback_url = data.get('callback', '')
+            supports_assets = 'supports_assets=true' in callback_url
+            accepted_asset_ids = []
+
+            if supports_assets:
+                print(f"\n✅ This LNURL accepts Taproot Assets! (detected in callback URL)")
+
+                # Parse asset IDs from callback URL
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    parsed_url = urlparse(callback_url)
+                    query_params = parse_qs(parsed_url.query)
+
+                    if "asset_ids" in query_params:
+                        asset_ids_str = query_params["asset_ids"][0]
+                        accepted_asset_ids = asset_ids_str.split("|") if asset_ids_str else []
+                        print(f"Accepted assets: {accepted_asset_ids}")
+                except Exception as e:
+                    print(f"Failed to parse asset IDs: {e}")
             else:
                 print(f"\n❌ This LNURL does not accept Taproot Assets")
             
@@ -68,7 +82,7 @@ async def test_lnurl_flow(lnurl_string: str, amount_sats: int, asset_id: Optiona
             callback_params = {'amount': amount_msat}
             
             # Add asset_id if supported and provided
-            if asset_id and data.get('acceptsAssets') and asset_id in data.get('acceptedAssetIds', []):
+            if asset_id and supports_assets and asset_id in accepted_asset_ids:
                 callback_params['asset_id'] = asset_id
                 print(f"\nMaking callback with asset_id: {asset_id}")
             else:
