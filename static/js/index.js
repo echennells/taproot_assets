@@ -664,9 +664,11 @@ window.app = Vue.createApp({
           // Handle success action if present
           if (response.data.lnurl_success_action) {
             const action = response.data.lnurl_success_action;
-            if (action.tag === 'message') {
-              NotificationService.showInfo(action.message);
-            } else if (action.tag === 'url') {
+            // Skip message display to avoid redundant notifications
+            // if (action.tag === 'message') {
+            //   NotificationService.showInfo(action.message);
+            // } else
+            if (action.tag === 'url') {
               window.open(action.url, '_blank');
             }
           }
