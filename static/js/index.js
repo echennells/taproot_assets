@@ -584,7 +584,7 @@ window.app = Vue.createApp({
             const asset = this.assets.find(a => a.asset_id === parsedInvoice.asset_info.asset_id);
             if (asset) {
               this.paymentDialog.selectedAsset = asset;
-              NotificationService.showInfo(`LNURL Payment: ${parsedInvoice.amount} ${parsedInvoice.asset_info.asset_name}`);
+              // Removed popup notification - keep it clean
             }
           }
           
