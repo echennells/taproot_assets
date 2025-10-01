@@ -101,7 +101,7 @@ class TaprootInvoiceManager:
             invoice = lightning_pb2.Invoice(
                 memo=description or "Taproot Asset Transfer",  # Still using memo in the Lightning Invoice object
                 value=0,  # No Bitcoin value
-                private=True,
+                private=False,  # Disable route hints to avoid SCID alias issues
                 expiry=expiry or 3600
             )
             request.invoice_request.MergeFrom(invoice)
