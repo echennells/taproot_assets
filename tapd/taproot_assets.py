@@ -225,24 +225,27 @@ class TaprootAssetManager:
                             asset_genesis = asset.get("asset_genesis", {})
                             asset_id = asset_genesis.get("asset_id", "")
                             name = asset_genesis.get("name", "")
-                            
+
                             if not asset_id:
                                 continue
-                            
+
+                            # Extract decimal_display from asset data
+                            decimal_display = asset.get("decimal_display", 0)
+
                             # Get balance info from local_assets
                             local_balance = 0
                             for local_asset in asset_data.get("local_assets", []):
                                 if local_asset.get("asset_id") == asset_id:
                                     local_balance = local_asset.get("amount", 0)
                                     break
-                            
+
                             # Get remote balance
                             remote_balance = 0
                             for remote_asset in asset_data.get("remote_assets", []):
                                 if remote_asset.get("asset_id") == asset_id:
                                     remote_balance = remote_asset.get("amount", 0)
                                     break
-                            
+
                             asset_info = {
                                 "asset_id": asset_id,
                                 "name": name,
@@ -253,7 +256,8 @@ class TaprootAssetManager:
                                 "local_balance": local_balance,
                                 "remote_balance": remote_balance,
                                 "commitment_type": str(channel.commitment_type),
-                                "active": channel.active
+                                "active": channel.active,
+                                "decimal_display": decimal_display
                             }
                             channel_assets.append(asset_info)
                     
@@ -279,7 +283,10 @@ class TaprootAssetManager:
                                 name = asset_utxo["name"]
                             elif "asset_genesis" in asset_utxo and "name" in asset_utxo["asset_genesis"]:
                                 name = asset_utxo["asset_genesis"]["name"]
-                            
+
+                            # Extract decimal_display
+                            decimal_display = asset.get("decimal_display", 0)
+
                             # Create asset info dictionary
                             asset_info = {
                                 "asset_id": asset_id,
@@ -291,7 +298,8 @@ class TaprootAssetManager:
                                 "local_balance": asset.get("local_balance", 0),
                                 "remote_balance": asset.get("remote_balance", 0),
                                 "commitment_type": str(channel.commitment_type),
-                                "active": channel.active  # Include active status from channel
+                                "active": channel.active,  # Include active status from channel
+                                "decimal_display": decimal_display
                             }
                             
                             channel_assets.append(asset_info)
