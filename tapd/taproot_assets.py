@@ -229,8 +229,9 @@ class TaprootAssetManager:
                             if not asset_id:
                                 continue
 
-                            # Extract decimal_display from asset data
+                            # Extract decimal_display from asset data - debug logging
                             decimal_display = asset.get("decimal_display", 0)
+                            logger.info(f"Channel asset {asset_id[:16]}...: decimal_display={decimal_display}, raw_asset_keys={list(asset.keys())}")
 
                             # Get balance info from local_assets
                             local_balance = 0
