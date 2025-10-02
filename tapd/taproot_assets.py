@@ -206,10 +206,13 @@ class TaprootAssetManager:
             request = lightning_pb2.ListChannelsRequest()
             response = await self.node.ln_stub.ListChannels(request, timeout=10)
 
+            logger.info(f"DEBUG: ListChannels returned {len(response.channels)} channels")
+
             channel_assets = []
 
             # Process each channel
-            for channel in response.channels:
+            for i, channel in enumerate(response.channels):
+                logger.info(f"DEBUG: Channel {i}: has_custom_data={hasattr(channel, 'custom_channel_data')}, data_length={len(channel.custom_channel_data) if hasattr(channel, 'custom_channel_data') and channel.custom_channel_data else 0}")
                 # Skip channels without custom_channel_data
                 if not hasattr(channel, 'custom_channel_data') or not channel.custom_channel_data:
                     continue
@@ -217,7 +220,9 @@ class TaprootAssetManager:
                 try:
                     # Parse JSON data
                     asset_data = json.loads(channel.custom_channel_data.decode('utf-8'))
-                    
+
+                    logger.info(f"DEBUG: Channel {i} asset_data keys: {list(asset_data.keys())}")
+
                     # Handle new v0.15.0 format with funding_assets
                     if "funding_assets" in asset_data:
                         # Process funding assets (contains full asset details)
