@@ -358,8 +358,17 @@ async def api_get_asset_rate(
         if buy_order_response.accepted_quote:
             # Extract rate
             rate_info = buy_order_response.accepted_quote.ask_asset_rate
+
+            # ADD THIS LOGGING:
+            log_info(API, f"RFQ DEBUG - coefficient: {rate_info.coefficient}")
+            log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
+            log_info(API, f"RFQ DEBUG - amount: {amount}")
+
             total_millisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
             rate_per_unit = (total_millisats / amount) / 1000
+
+            log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
+            log_info(API, f"RFQ DEBUG - rate_per_unit: {rate_per_unit}")
             
             return {
                 "asset_id": asset_id,
