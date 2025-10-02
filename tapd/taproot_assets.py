@@ -229,9 +229,14 @@ class TaprootAssetManager:
                             if not asset_id:
                                 continue
 
-                            # Extract decimal_display from asset data - debug logging
-                            decimal_display = asset.get("decimal_display", 0)
-                            logger.info(f"Channel asset {asset_id[:16]}...: decimal_display={decimal_display}, raw_asset_keys={list(asset.keys())}")
+                            # Extract decimal_display from asset data - it's a nested object
+                            decimal_display_obj = asset.get("decimal_display", {})
+                            decimal_display = 0
+                            if isinstance(decimal_display_obj, dict):
+                                decimal_display = decimal_display_obj.get("decimal_display", 0)
+                            elif isinstance(decimal_display_obj, int):
+                                decimal_display = decimal_display_obj
+                            logger.info(f"Channel asset {asset_id[:16]}...: decimal_display={decimal_display}, decimal_display_obj={decimal_display_obj}, raw_asset_keys={list(asset.keys())}")
 
                             # Get balance info from local_assets
                             local_balance = 0
@@ -285,8 +290,13 @@ class TaprootAssetManager:
                             elif "asset_genesis" in asset_utxo and "name" in asset_utxo["asset_genesis"]:
                                 name = asset_utxo["asset_genesis"]["name"]
 
-                            # Extract decimal_display
-                            decimal_display = asset.get("decimal_display", 0)
+                            # Extract decimal_display - it's a nested object
+                            decimal_display_obj = asset.get("decimal_display", {})
+                            decimal_display = 0
+                            if isinstance(decimal_display_obj, dict):
+                                decimal_display = decimal_display_obj.get("decimal_display", 0)
+                            elif isinstance(decimal_display_obj, int):
+                                decimal_display = decimal_display_obj
 
                             # Create asset info dictionary
                             asset_info = {
