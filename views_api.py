@@ -328,15 +328,26 @@ async def api_get_asset_rate(
         # Get RFQ stub
         rfq_stub = rfq_pb2_grpc.RfqStub(taproot_wallet.node.channel)
         
-        # Find peer with asset channel and get decimal info
+        # Get assets and extract decimal info first
         assets = await AssetService.list_assets(wallet)
-        peer_pubkey = None
-        asset_decimals = 0
+        log_info(API, f"RFQ DEBUG - AssetService.list_assets returned {len(assets)} assets")
+        for i, asset in enumerate(assets):
+            log_info(API, f"RFQ DEBUG - Asset {i}: id={asset.get('asset_id', 'N/A')[:16]}..., has_channel={bool(asset.get('channel_info'))}, decimal_display={asset.get('decimal_display', 'N/A')}")
 
+        asset_decimals = 0
+        peer_pubkey = None
+
+        # First pass: find decimals for any matching asset
+        for asset in assets:
+            if asset.get("asset_id") == asset_id:
+                asset_decimals = asset.get("decimal_display", 0)
+                log_info(API, f"RFQ DEBUG - Found asset {asset_id}, decimal_display: {asset_decimals}")
+                break
+
+        # Second pass: find peer for RFQ
         for asset in assets:
             if asset.get("asset_id") == asset_id and asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
                 peer_pubkey = asset["channel_info"]["peer_pubkey"]
-                asset_decimals = asset.get("decimal_display", 0)
                 break
 
         if not peer_pubkey:
