@@ -148,11 +148,11 @@ class TaprootAssetManager:
                 # Add each channel as a separate asset entry
                 for channel in channels:
                     asset_with_channel = base_asset.copy()
-                    
+
                     # Get node alias for the peer
                     peer_pubkey = channel["remote_pubkey"]
                     peer_alias = await self.get_node_alias(peer_pubkey)
-                    
+
                     asset_with_channel["channel_info"] = {
                         "channel_point": channel["channel_point"],
                         "capacity": channel["capacity"],
@@ -164,6 +164,8 @@ class TaprootAssetManager:
                         "active": channel.get("active", True)  # Add active status
                     }
                     asset_with_channel["amount"] = str(channel["local_balance"])
+                    # Add decimal_display from channel data to the asset object
+                    asset_with_channel["decimal_display"] = channel.get("decimal_display", 0)
                     result_assets.append(asset_with_channel)
             
             # We're not adding non-channel assets anymore, per the requirements
