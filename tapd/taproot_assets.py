@@ -101,6 +101,11 @@ class TaprootAssetManager:
             # Convert response assets to dictionary format
             assets = []
             for asset in response.assets:
+                # Extract decimal display value
+                decimal_display = 0
+                if hasattr(asset, 'decimal_display') and asset.decimal_display:
+                    decimal_display = asset.decimal_display.decimal_display
+
                 assets.append({
                     "name": asset.asset_genesis.name.decode('utf-8') if isinstance(asset.asset_genesis.name, bytes) else asset.asset_genesis.name,
                     "asset_id": asset.asset_genesis.asset_id.hex() if isinstance(asset.asset_genesis.asset_id, bytes) else asset.asset_genesis.asset_id,
@@ -110,7 +115,8 @@ class TaprootAssetManager:
                     "meta_hash": asset.asset_genesis.meta_hash.hex() if isinstance(asset.asset_genesis.meta_hash, bytes) else asset.asset_genesis.meta_hash,
                     "version": str(asset.version),
                     "is_spent": asset.is_spent,
-                    "script_key": asset.script_key.hex() if isinstance(asset.script_key, bytes) else asset.script_key
+                    "script_key": asset.script_key.hex() if isinstance(asset.script_key, bytes) else asset.script_key,
+                    "decimal_display": decimal_display
                 })
 
             # Get channel assets

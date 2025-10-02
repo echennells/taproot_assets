@@ -328,15 +328,17 @@ async def api_get_asset_rate(
         # Get RFQ stub
         rfq_stub = rfq_pb2_grpc.RfqStub(taproot_wallet.node.channel)
         
-        # Find peer with asset channel
+        # Find peer with asset channel and get decimal info
         assets = await AssetService.list_assets(wallet)
         peer_pubkey = None
-        
+        asset_decimals = 0
+
         for asset in assets:
             if asset.get("asset_id") == asset_id and asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
                 peer_pubkey = asset["channel_info"]["peer_pubkey"]
+                asset_decimals = asset.get("decimal_display", 0)
                 break
-        
+
         if not peer_pubkey:
             return {
                 "error": "No peer found with channel for this asset",
@@ -363,11 +365,24 @@ async def api_get_asset_rate(
             log_info(API, f"RFQ DEBUG - coefficient: {rate_info.coefficient}")
             log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
             log_info(API, f"RFQ DEBUG - amount: {amount}")
+            log_info(API, f"RFQ DEBUG - asset_decimals: {asset_decimals}")
 
             total_millisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
-            rate_per_unit = (total_millisats / amount) / 1000
+
+            # Apply decimal adjustment to the rate calculation
+            # The RFQ quote is for the requested amount, but we need rate per base unit
+            # accounting for the asset's decimal places
+            if asset_decimals > 0:
+                # Adjust for decimal display: rate needs to be divided by 10^decimal_display
+                # to convert from display units to base units
+                decimal_multiplier = 10 ** asset_decimals
+                rate_per_unit = ((total_millisats / amount) / 1000) / decimal_multiplier
+            else:
+                # No decimal adjustment needed
+                rate_per_unit = (total_millisats / amount) / 1000
 
             log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
+            log_info(API, f"RFQ DEBUG - decimal_multiplier: {10 ** asset_decimals if asset_decimals > 0 else 1}")
             log_info(API, f"RFQ DEBUG - rate_per_unit: {rate_per_unit}")
             
             return {
