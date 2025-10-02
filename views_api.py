@@ -380,17 +380,21 @@ async def api_get_asset_rate(
 
             total_millisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
 
+            # Calculate base rate per unit first
+            base_rate_per_unit = (total_millisats / amount) / 1000
+
             # Apply decimal adjustment to the rate calculation
-            # The RFQ quote is for the requested amount, but we need rate per base unit
-            # accounting for the asset's decimal places
+            # The RFQ amount is in base units, but we need to account for decimal display
             if asset_decimals > 0:
-                # Adjust for decimal display: rate needs to be divided by 10^decimal_display
-                # to convert from display units to base units
-                decimal_multiplier = 10 ** asset_decimals
-                rate_per_unit = ((total_millisats / amount) / 1000) / decimal_multiplier
+                # The oracle rate is based on display units, but RFQ deals with base units
+                # For 3 decimals: 1 display unit = 1000 base units
+                # If oracle says 1 sat = 1 display unit, then 1 sat = 1000 base units
+                # So rate per base unit should be 1/1000 = 0.001 sats per base unit
+                decimal_divisor = 10 ** asset_decimals
+                rate_per_unit = base_rate_per_unit / decimal_divisor
             else:
                 # No decimal adjustment needed
-                rate_per_unit = (total_millisats / amount) / 1000
+                rate_per_unit = base_rate_per_unit
 
             log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
             log_info(API, f"RFQ DEBUG - decimal_multiplier: {10 ** asset_decimals if asset_decimals > 0 else 1}")
