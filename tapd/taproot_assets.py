@@ -192,10 +192,11 @@ class TaprootAssetManager:
 
         Args:
             force_refresh: Whether to force a refresh from the node
-            
+
         Returns:
             A list of dictionaries containing channel and asset information.
         """
+        logger.info(f"CHANNEL DEBUG: list_channel_assets called with force_refresh={force_refresh}")
         # Check cache first if not forcing refresh
         if not force_refresh:
             cached_assets = cache.get(self.CHANNEL_ASSET_CACHE_KEY)
