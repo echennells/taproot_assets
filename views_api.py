@@ -377,17 +377,14 @@ async def api_get_asset_rate(
             log_info(API, f"RFQ DEBUG - amount: {amount}")
             log_info(API, f"RFQ DEBUG - asset_decimals: {asset_decimals}")
 
-            # ORACLE FIX: The oracle is returning coefficient 100x too high for mockoracleassetsperbtc=100000000
-            # Expected: coefficient should be 1000000 (1M) for 1 sat = 1 display unit
-            # Actual: coefficient is 100000000 (100M) which is 100x too high
-            # So we divide by 100 to compensate
+            # Use the raw oracle coefficient without hardcoded adjustments
+            # The oracle coefficient represents the raw exchange rate data
             oracle_coefficient = float(rate_info.coefficient)
-            adjusted_coefficient = oracle_coefficient / 100  # Compensate for 100x oracle rate
-            total_millisats = adjusted_coefficient / (10 ** rate_info.scale)
+            total_millisats = oracle_coefficient / (10 ** rate_info.scale)
 
-            log_info(API, f"RFQ FIX - oracle_coefficient: {oracle_coefficient}")
-            log_info(API, f"RFQ FIX - adjusted_coefficient: {adjusted_coefficient}")
-            log_info(API, f"RFQ FIX - total_millisats: {total_millisats}")
+            log_info(API, f"RFQ DEBUG - oracle_coefficient: {oracle_coefficient}")
+            log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
+            log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
 
             # Calculate base rate per unit first
             base_rate_per_unit = (total_millisats / amount) / 1000
