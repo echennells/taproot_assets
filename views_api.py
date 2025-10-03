@@ -305,14 +305,19 @@ async def api_lnurl_info(
 @handle_api_error
 async def api_get_asset_rate(
     asset_id: str,
-    amount: int = Query(1, description="Amount to get rate for"),
+    amount: int = Query(1, description="Amount to get rate for (ignored, always uses 1)"),
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """
     Get current RFQ rate for an asset.
-    Returns the rate in sats per asset unit.
+
+    CRITICAL DISCOVERY: The oracle returns a FIXED BUDGET, not a market rate.
+    We MUST always request for exactly 1 base unit to get consistent rates,
+    regardless of the actual amount the user wants to transact.
+
+    Returns rate in sats per display unit.
     """
-    log_info(API, f"Getting rate for asset {asset_id}, amount={amount}")
+    log_info(API, f"Getting rate for asset {asset_id}")
     
     try:
         # Import required modules
@@ -330,36 +335,32 @@ async def api_get_asset_rate(
         
         # Get assets and extract decimal info first
         assets = await AssetService.list_assets(wallet)
-        log_info(API, f"RFQ DEBUG - AssetService.list_assets returned {len(assets)} assets")
-        for i, asset in enumerate(assets):
-            log_info(API, f"RFQ DEBUG - Asset {i}: id={asset.get('asset_id', 'N/A')[:16]}..., has_channel={bool(asset.get('channel_info'))}, decimal_display={asset.get('decimal_display', 'N/A')}")
 
         asset_decimals = 0
         peer_pubkey = None
 
-        # First pass: find decimals for any matching asset
+        # Find asset info and peer for RFQ
         for asset in assets:
             if asset.get("asset_id") == asset_id:
                 asset_decimals = asset.get("decimal_display", 0)
-                log_info(API, f"RFQ DEBUG - Found asset {asset_id}, decimal_display: {asset_decimals}")
-                break
-
-        # Second pass: find peer for RFQ
-        for asset in assets:
-            if asset.get("asset_id") == asset_id and asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
-                peer_pubkey = asset["channel_info"]["peer_pubkey"]
+                if asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
+                    peer_pubkey = asset["channel_info"]["peer_pubkey"]
                 break
 
         if not peer_pubkey:
-            return {
-                "error": "No peer found with channel for this asset",
-                "rate_per_unit": None
-            }
-        
+            return {"error": "No peer found with channel for this asset", "rate_per_unit": None}
+
+        # CRITICAL: Always request for exactly 1 base unit
+        # Oracle returns fixed budget, so rate = budget / amount_requested
+        # We standardize on amount=1 to get consistent rates
+        STANDARD_REQUEST_AMOUNT = 1
+
+        log_info(API, f"RFQ - Requesting rate for {STANDARD_REQUEST_AMOUNT} base unit (decimals={asset_decimals})")
+
         # Create buy order request
         buy_order_request = rfq_pb2.AddAssetBuyOrderRequest(
             asset_specifier=rfq_pb2.AssetSpecifier(asset_id=bytes.fromhex(asset_id)),
-            asset_max_amt=amount,
+            asset_max_amt=STANDARD_REQUEST_AMOUNT,  # Always 1
             expiry=int((datetime.now(timezone.utc) + timedelta(minutes=1)).timestamp()),
             timeout_seconds=5,
             peer_pub_key=bytes.fromhex(peer_pubkey)
@@ -372,50 +373,35 @@ async def api_get_asset_rate(
             # Extract rate
             rate_info = buy_order_response.accepted_quote.ask_asset_rate
 
-            log_info(API, f"RFQ DEBUG - original_coefficient: {rate_info.coefficient}")
-            log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
-            log_info(API, f"RFQ DEBUG - amount: {amount}")
-            log_info(API, f"RFQ DEBUG - asset_decimals: {asset_decimals}")
+            log_info(API, f"RFQ - coefficient: {rate_info.coefficient}")
+            log_info(API, f"RFQ - scale: {rate_info.scale}")
 
-            # Use the raw oracle coefficient without hardcoded adjustments
-            # The oracle coefficient represents the raw exchange rate data
+            # Oracle coefficient is the fixed budget
             oracle_coefficient = float(rate_info.coefficient)
             total_millisats = oracle_coefficient / (10 ** rate_info.scale)
 
-            log_info(API, f"RFQ DEBUG - oracle_coefficient: {oracle_coefficient}")
-            log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
-            log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
+            log_info(API, f"RFQ - total_millisats (fixed budget): {total_millisats}")
 
-            # Oracle always returns rates in base units, convert to display units for Bitcoin Switch
-            # Calculate rate per base unit first
-            base_rate_per_unit = (total_millisats / amount) / 1000
+            # Rate per base unit
+            sats_per_base_unit = (total_millisats / STANDARD_REQUEST_AMOUNT) / 1000
 
-            # Convert to rate per display unit (what Bitcoin Switch expects)
+            log_info(API, f"RFQ - sats_per_base_unit: {sats_per_base_unit}")
+
+            # Convert to display units
             if asset_decimals > 0:
-                # For N decimals: 1 display unit = 10^N base units
-                # If oracle gives rate per base unit, we need rate per display unit
-                # rate_per_display_unit = rate_per_base_unit × (base_units_per_display_unit)
-                base_units_per_display_unit = 10 ** asset_decimals
-                rate_per_unit = base_rate_per_unit * base_units_per_display_unit
+                rate_per_display_unit = sats_per_base_unit * (10 ** asset_decimals)
+                log_info(API, f"RFQ - rate_per_display_unit: {rate_per_display_unit} (×{10**asset_decimals})")
             else:
-                # No decimals: base units = display units
-                rate_per_unit = base_rate_per_unit
+                rate_per_display_unit = sats_per_base_unit
+                log_info(API, f"RFQ - rate_per_display_unit: {rate_per_display_unit} (no decimals)")
 
-            log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
-            log_info(API, f"RFQ DEBUG - base_rate_per_unit: {base_rate_per_unit}")
-            log_info(API, f"RFQ DEBUG - decimal_multiplier: {10 ** asset_decimals if asset_decimals > 0 else 1}")
-            log_info(API, f"RFQ DEBUG - rate_per_unit: {rate_per_unit}")
-            log_info(API, f"RFQ DEBUG - CALCULATION: {total_millisats} / {amount} / 1000 = {base_rate_per_unit}")
-            if asset_decimals > 0:
-                log_info(API, f"RFQ DEBUG - DECIMAL ADJ: {base_rate_per_unit} * {10 ** asset_decimals} = {rate_per_unit}")
-            log_info(API, f"RFQ FIX - CORRECTED RATE: {rate_per_unit} sats/display_unit (should now be ~1.0 for 3 decimals with 1:1 rate)")
-            
             return {
                 "asset_id": asset_id,
-                "amount": amount,
-                "rate_per_unit": rate_per_unit,
-                "total_sats": int(amount * rate_per_unit),
-                "quote_id": buy_order_response.accepted_quote.id.hex()
+                "amount": STANDARD_REQUEST_AMOUNT,
+                "rate_per_unit": rate_per_display_unit,
+                "total_sats": rate_per_display_unit,
+                "quote_id": buy_order_response.accepted_quote.id.hex(),
+                "decimals": asset_decimals
             }
         else:
             return {
