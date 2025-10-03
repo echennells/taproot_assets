@@ -397,8 +397,13 @@ async def api_get_asset_rate(
                 rate_per_unit = base_rate_per_unit
 
             log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
-            log_info(API, f"RFQ DEBUG - decimal_multiplier: {10 ** asset_decimals if asset_decimals > 0 else 1}")
+            log_info(API, f"RFQ DEBUG - base_rate_per_unit: {base_rate_per_unit}")
+            log_info(API, f"RFQ DEBUG - decimal_divisor: {10 ** asset_decimals if asset_decimals > 0 else 1}")
             log_info(API, f"RFQ DEBUG - rate_per_unit: {rate_per_unit}")
+            log_info(API, f"RFQ DEBUG - CALCULATION: {total_millisats} / {amount} / 1000 = {base_rate_per_unit}")
+            if asset_decimals > 0:
+                log_info(API, f"RFQ DEBUG - DECIMAL ADJ: {base_rate_per_unit} / {10 ** asset_decimals} = {rate_per_unit}")
+            log_info(API, f"RFQ DEBUG - EXPECTED: For mockoracleassetsperbtc=100000000 with 3 decimals, rate should be ~0.001 sats/base_unit")
             
             return {
                 "asset_id": asset_id,
