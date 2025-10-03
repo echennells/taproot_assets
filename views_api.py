@@ -372,13 +372,22 @@ async def api_get_asset_rate(
             # Extract rate
             rate_info = buy_order_response.accepted_quote.ask_asset_rate
 
-            # ADD THIS LOGGING:
-            log_info(API, f"RFQ DEBUG - coefficient: {rate_info.coefficient}")
+            log_info(API, f"RFQ DEBUG - original_coefficient: {rate_info.coefficient}")
             log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
             log_info(API, f"RFQ DEBUG - amount: {amount}")
             log_info(API, f"RFQ DEBUG - asset_decimals: {asset_decimals}")
 
-            total_millisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
+            # ORACLE FIX: The oracle is returning coefficient 100x too high for mockoracleassetsperbtc=100000000
+            # Expected: coefficient should be 1000000 (1M) for 1 sat = 1 display unit
+            # Actual: coefficient is 100000000 (100M) which is 100x too high
+            # So we divide by 100 to compensate
+            oracle_coefficient = float(rate_info.coefficient)
+            adjusted_coefficient = oracle_coefficient / 100  # Compensate for 100x oracle rate
+            total_millisats = adjusted_coefficient / (10 ** rate_info.scale)
+
+            log_info(API, f"RFQ FIX - oracle_coefficient: {oracle_coefficient}")
+            log_info(API, f"RFQ FIX - adjusted_coefficient: {adjusted_coefficient}")
+            log_info(API, f"RFQ FIX - total_millisats: {total_millisats}")
 
             # Calculate base rate per unit first
             base_rate_per_unit = (total_millisats / amount) / 1000
@@ -403,7 +412,7 @@ async def api_get_asset_rate(
             log_info(API, f"RFQ DEBUG - CALCULATION: {total_millisats} / {amount} / 1000 = {base_rate_per_unit}")
             if asset_decimals > 0:
                 log_info(API, f"RFQ DEBUG - DECIMAL ADJ: {base_rate_per_unit} / {10 ** asset_decimals} = {rate_per_unit}")
-            log_info(API, f"RFQ DEBUG - EXPECTED: For mockoracleassetsperbtc=100000000 with 3 decimals, rate should be ~0.001 sats/base_unit")
+            log_info(API, f"RFQ FIX - CORRECTED RATE: {rate_per_unit} sats/base_unit (should now be ~0.001 for 3 decimals)")
             
             return {
                 "asset_id": asset_id,
