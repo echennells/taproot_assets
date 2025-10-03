@@ -392,27 +392,27 @@ async def api_get_asset_rate(
             # Calculate base rate per unit first
             base_rate_per_unit = (total_millisats / amount) / 1000
 
-            # Apply decimal adjustment to the rate calculation
-            # The RFQ amount is in base units, but we need to account for decimal display
+            # The rate should be returned as sats per DISPLAY UNIT for Bitcoin Switch
+            # RFQ deals with base units, but Bitcoin Switch expects display unit rates
             if asset_decimals > 0:
-                # The oracle rate is based on display units, but RFQ deals with base units
                 # For 3 decimals: 1 display unit = 1000 base units
-                # If oracle says 1 sat = 1 display unit, then 1 sat = 1000 base units
-                # So rate per base unit should be 1/1000 = 0.001 sats per base unit
-                decimal_divisor = 10 ** asset_decimals
-                rate_per_unit = base_rate_per_unit / decimal_divisor
+                # If RFQ quote is for 1000 base units at 1000 sats total
+                # Then rate per display unit = 1000 sats / 1 display unit = 1000 sats/display_unit
+                # NOT rate per base unit = 1000 sats / 1000 base units = 1 sat/base_unit
+                decimal_multiplier = 10 ** asset_decimals
+                rate_per_unit = base_rate_per_unit * decimal_multiplier
             else:
                 # No decimal adjustment needed
                 rate_per_unit = base_rate_per_unit
 
             log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
             log_info(API, f"RFQ DEBUG - base_rate_per_unit: {base_rate_per_unit}")
-            log_info(API, f"RFQ DEBUG - decimal_divisor: {10 ** asset_decimals if asset_decimals > 0 else 1}")
+            log_info(API, f"RFQ DEBUG - decimal_multiplier: {10 ** asset_decimals if asset_decimals > 0 else 1}")
             log_info(API, f"RFQ DEBUG - rate_per_unit: {rate_per_unit}")
             log_info(API, f"RFQ DEBUG - CALCULATION: {total_millisats} / {amount} / 1000 = {base_rate_per_unit}")
             if asset_decimals > 0:
-                log_info(API, f"RFQ DEBUG - DECIMAL ADJ: {base_rate_per_unit} / {10 ** asset_decimals} = {rate_per_unit}")
-            log_info(API, f"RFQ FIX - CORRECTED RATE: {rate_per_unit} sats/base_unit (should now be ~0.001 for 3 decimals)")
+                log_info(API, f"RFQ DEBUG - DECIMAL ADJ: {base_rate_per_unit} * {10 ** asset_decimals} = {rate_per_unit}")
+            log_info(API, f"RFQ FIX - CORRECTED RATE: {rate_per_unit} sats/display_unit (should now be ~1.0 for 3 decimals with 1:1 rate)")
             
             return {
                 "asset_id": asset_id,
