@@ -386,20 +386,19 @@ async def api_get_asset_rate(
             log_info(API, f"RFQ DEBUG - scale: {rate_info.scale}")
             log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
 
-            # Calculate base rate per unit first
+            # Oracle always returns rates in base units, convert to display units for Bitcoin Switch
+            # Calculate rate per base unit first
             base_rate_per_unit = (total_millisats / amount) / 1000
 
-            # The rate should be returned as sats per DISPLAY UNIT for Bitcoin Switch
-            # RFQ deals with base units, but Bitcoin Switch expects display unit rates
+            # Convert to rate per display unit (what Bitcoin Switch expects)
             if asset_decimals > 0:
-                # For 3 decimals: 1 display unit = 1000 base units
-                # If RFQ quote is for 1000 base units at 1000 sats total
-                # Then rate per display unit = 1000 sats / 1 display unit = 1000 sats/display_unit
-                # NOT rate per base unit = 1000 sats / 1000 base units = 1 sat/base_unit
-                decimal_multiplier = 10 ** asset_decimals
-                rate_per_unit = base_rate_per_unit * decimal_multiplier
+                # For N decimals: 1 display unit = 10^N base units
+                # If oracle gives rate per base unit, we need rate per display unit
+                # rate_per_display_unit = rate_per_base_unit × (base_units_per_display_unit)
+                base_units_per_display_unit = 10 ** asset_decimals
+                rate_per_unit = base_rate_per_unit * base_units_per_display_unit
             else:
-                # No decimal adjustment needed
+                # No decimals: base units = display units
                 rate_per_unit = base_rate_per_unit
 
             log_info(API, f"RFQ DEBUG - total_millisats: {total_millisats}")
