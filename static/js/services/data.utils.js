@@ -86,16 +86,32 @@ const DataUtils = {
   },
   
   /**
-   * Format asset balance for display
-   * @param {number|string} balance - Balance to format
-   * @param {number} decimals - Number of decimal places
-   * @returns {string} - Formatted balance
+   * Format asset balance for display with proper decimal places
+   * @param {number|string} balance - Balance to format (in base units)
+   * @param {number} decimalDisplay - Number of decimal places from asset definition
+   * @returns {string} - Formatted balance with proper decimal placement
    */
-  formatAssetBalance(balance, decimals = 0) {
+  formatAssetBalance(balance, decimalDisplay = 0) {
     if (balance === undefined || balance === null) return '0';
-    
+
+    // Convert to number if string
     const amount = typeof balance === 'string' ? parseFloat(balance) : balance;
-    return isNaN(amount) ? '0' : amount.toFixed(decimals);
+    if (isNaN(amount)) return '0';
+
+    // If no decimal places, return as is
+    if (decimalDisplay === 0) {
+      return amount.toLocaleString();
+    }
+
+    // Apply decimal places by dividing by 10^decimalDisplay
+    const divisor = Math.pow(10, decimalDisplay);
+    const displayAmount = amount / divisor;
+
+    // Format with proper decimal places and thousands separators
+    return displayAmount.toLocaleString(undefined, {
+      minimumFractionDigits: decimalDisplay,
+      maximumFractionDigits: decimalDisplay
+    });
   },
   
   /**
