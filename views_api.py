@@ -350,17 +350,22 @@ async def api_get_asset_rate(
         if not peer_pubkey:
             return {"error": "No peer found with channel for this asset", "rate_per_unit": None}
 
-        # CRITICAL: Always request for exactly 1 base unit
-        # Oracle returns fixed budget, so rate = budget / amount_requested
-        # We standardize on amount=1 to get consistent rates
-        STANDARD_REQUEST_AMOUNT = 1
+        # The mock oracle returns a fixed coefficient regardless of amount.
+        # We need to request a meaningful amount to get a usable rate.
+        # For assets with decimals, request 1 display unit worth of base units.
+        if asset_decimals > 0:
+            # For 3 decimals: request 1000 base units (= 1 display unit)
+            STANDARD_REQUEST_AMOUNT = 10 ** asset_decimals
+        else:
+            # For 0 decimals: 1 base unit = 1 display unit
+            STANDARD_REQUEST_AMOUNT = 1
 
-        log_info(API, f"RFQ - Requesting rate for {STANDARD_REQUEST_AMOUNT} base unit (decimals={asset_decimals})")
+        log_info(API, f"RFQ - Requesting rate for {STANDARD_REQUEST_AMOUNT} base units (= 1 display unit, decimals={asset_decimals})")
 
         # Create buy order request
         buy_order_request = rfq_pb2.AddAssetBuyOrderRequest(
             asset_specifier=rfq_pb2.AssetSpecifier(asset_id=bytes.fromhex(asset_id)),
-            asset_max_amt=STANDARD_REQUEST_AMOUNT,  # Always 1
+            asset_max_amt=STANDARD_REQUEST_AMOUNT,
             expiry=int((datetime.now(timezone.utc) + timedelta(minutes=1)).timestamp()),
             timeout_seconds=5,
             peer_pub_key=bytes.fromhex(peer_pubkey)
