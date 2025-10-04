@@ -381,14 +381,14 @@ async def api_get_asset_rate(
             log_info(API, f"RFQ - coefficient: {rate_info.coefficient}")
             log_info(API, f"RFQ - scale: {rate_info.scale}")
 
-            # Oracle coefficient is the fixed budget in sats
+            # Oracle coefficient is the fixed budget
             oracle_coefficient = float(rate_info.coefficient)
-            total_sats = oracle_coefficient / (10 ** rate_info.scale)
+            total_millisats = oracle_coefficient / (10 ** rate_info.scale)
 
-            log_info(API, f"RFQ - total_sats (fixed budget): {total_sats}")
+            log_info(API, f"RFQ - total_millisats (fixed budget): {total_millisats}")
 
             # Rate per base unit
-            sats_per_base_unit = total_sats / STANDARD_REQUEST_AMOUNT
+            sats_per_base_unit = (total_millisats / STANDARD_REQUEST_AMOUNT) / 1000
 
             log_info(API, f"RFQ - sats_per_base_unit: {sats_per_base_unit}")
 
