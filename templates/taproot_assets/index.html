@@ -73,9 +73,9 @@
             <div class="asset-detail">
               <div class="row q-col-gutter-md">
                 <div class="col-12">
-                  <div>Balance: {% raw %}{{ formatAssetAmount(asset.user_balance || asset.channel_info?.local_balance, asset) }}{% endraw %}</div>
+                  <div>Balance: {% raw %}{{ asset.user_balance ? formatAssetAmount(asset.user_balance, asset) : formatChannelAmount(asset.channel_info?.local_balance, asset) }}{% endraw %}</div>
                   <div v-if="asset.channel_info && asset.channel_info.remote_balance !== undefined" class="text-positive">
-                    Max Receivable: {% raw %}{{ formatAssetAmount(asset.channel_info.remote_balance, asset) }}{% endraw %}
+                    Max Receivable: {% raw %}{{ formatChannelAmount(asset.channel_info.remote_balance, asset) }}{% endraw %}
                   </div>
                   <div v-if="asset.channel_info && asset.channel_info.peer_alias" class="text-grey-7" style="font-size: 0.85em;">
                     Peer: {% raw %}{{ asset.channel_info.peer_alias }}{% endraw %}
@@ -500,7 +500,7 @@
         
         <div class="row q-col-gutter-md q-mt-sm">
           <div class="col-12">
-            <div>Balance: {% raw %}{{ formatAssetAmount(paymentDialog.selectedAsset.user_balance || paymentDialog.selectedAsset.channel_info?.local_balance, paymentDialog.selectedAsset) }}{% endraw %}</div>
+            <div>Balance: {% raw %}{{ paymentDialog.selectedAsset.user_balance ? formatAssetAmount(paymentDialog.selectedAsset.user_balance, paymentDialog.selectedAsset) : formatChannelAmount(paymentDialog.selectedAsset.channel_info?.local_balance, paymentDialog.selectedAsset) }}{% endraw %}</div>
           </div>
         </div>
       </div>

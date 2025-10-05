@@ -86,19 +86,20 @@ const DataUtils = {
   },
   
   /**
-   * Format asset balance for display with proper decimal places
-   * @param {number|string} balance - Balance to format (in base units)
+   * Format channel balance from base units to display units
+   * Used ONLY for channel balances (local_balance, remote_balance) from LND
+   * @param {number|string} baseUnits - Balance in base units from LND
    * @param {number} decimalDisplay - Number of decimal places from asset definition
    * @returns {string} - Formatted balance with proper decimal placement
    */
-  formatAssetBalance(balance, decimalDisplay = 0) {
-    if (balance === undefined || balance === null) return '0';
+  formatChannelBalance(baseUnits, decimalDisplay = 0) {
+    if (baseUnits === undefined || baseUnits === null) return '0';
 
     // Convert to number if string
-    const amount = typeof balance === 'string' ? parseFloat(balance) : balance;
+    const amount = typeof baseUnits === 'string' ? parseFloat(baseUnits) : baseUnits;
     if (isNaN(amount)) return '0';
 
-    // If no decimal places, return as is
+    // If no decimal places, just format with commas
     if (decimalDisplay === 0) {
       return amount.toLocaleString();
     }
@@ -113,6 +114,31 @@ const DataUtils = {
       maximumFractionDigits: decimalDisplay
     });
   },
+
+  /**
+   * Format asset amount that's already in display units
+   * Used for amounts from backend (invoices, payments, balances)
+   * @param {number|string} displayUnits - Amount already in display units
+   * @param {number} decimalDisplay - Number of decimal places for formatting
+   * @returns {string} - Formatted amount with commas and proper decimals
+   */
+  formatAssetBalance(displayUnits, decimalDisplay = 0) {
+    if (displayUnits === undefined || displayUnits === null) return '0';
+
+    // Convert to number if string
+    const amount = typeof displayUnits === 'string' ? parseFloat(displayUnits) : displayUnits;
+    if (isNaN(amount)) return '0';
+
+    // Just format with the appropriate decimal places (no conversion needed)
+    if (decimalDisplay === 0) {
+      return amount.toLocaleString();
+    }
+
+    return amount.toLocaleString(undefined, {
+      minimumFractionDigits: decimalDisplay,
+      maximumFractionDigits: decimalDisplay
+    });
+  },
   
   /**
    * Parse asset value from any format to a number
@@ -121,13 +147,35 @@ const DataUtils = {
    */
   parseAssetValue(value) {
     if (!value) return 0;
-    
+
     if (typeof value === 'string') {
       const cleanValue = value.replace(/[^0-9.]/g, '');
       return parseFloat(cleanValue) || 0;
     }
-    
+
     return typeof value === 'number' ? (isNaN(value) ? 0 : value) : 0;
+  },
+
+  /**
+   * Convert display amount to base units for API calls
+   * @param {number|string} displayAmount - Amount in display units (what user sees)
+   * @param {number} decimalDisplay - Number of decimal places from asset definition
+   * @returns {number} - Amount in base units (for API/backend)
+   */
+  convertToBaseUnits(displayAmount, decimalDisplay = 0) {
+    if (displayAmount === undefined || displayAmount === null) return 0;
+
+    const amount = typeof displayAmount === 'string' ? parseFloat(displayAmount) : displayAmount;
+    if (isNaN(amount)) return 0;
+
+    // If no decimal places, return as is
+    if (decimalDisplay === 0) {
+      return Math.round(amount);
+    }
+
+    // Multiply by 10^decimalDisplay to convert to base units
+    const multiplier = Math.pow(10, decimalDisplay);
+    return Math.round(amount * multiplier);
   },
   
   /**

@@ -176,11 +176,18 @@ window.app = Vue.createApp({
       return AssetService.getAssetName(assetId);
     },
 
-    // Format asset amount with proper decimal display
+    // Format asset amount that's already in display units (from backend)
     formatAssetAmount(amount, asset) {
       if (!asset) return amount || '0';
       const decimalDisplay = asset.decimal_display || 0;
       return DataUtils.formatAssetBalance(amount, decimalDisplay);
+    },
+
+    // Format channel balance from base units (from LND)
+    formatChannelAmount(amount, asset) {
+      if (!asset) return amount || '0';
+      const decimalDisplay = asset.decimal_display || 0;
+      return DataUtils.formatChannelBalance(amount, decimalDisplay);
     },
 
     // Check if a channel is active (used for styling)
