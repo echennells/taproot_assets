@@ -22,6 +22,13 @@ from .services.lnurl_service import LnurlService
 taproot_assets_api_router = APIRouter(prefix="/api/v1/taproot", tags=["taproot_assets"])
 
 
+def clean_lnurl(lnurl_string: str) -> str:
+    """Clean LNURL by removing lightning: prefix if present (case-insensitive)."""
+    if lnurl_string.lower().startswith('lightning:'):
+        return lnurl_string[10:]  # Remove first 10 characters
+    return lnurl_string
+
+
 @taproot_assets_api_router.get("/parse-invoice", status_code=HTTPStatus.OK)
 @handle_api_error
 async def api_parse_invoice(
@@ -37,8 +44,7 @@ async def api_parse_invoice(
     log_debug(API, f"Parsing payment request for wallet {wallet.wallet.id}")
 
     # Strip lightning: prefix if present
-    if payment_request.lower().startswith("lightning:"):
-        payment_request = payment_request[10:]
+    payment_request = clean_lnurl(payment_request)
 
     # Check if this is an LNURL (starts with "lnurl" case-insensitive)
     if payment_request.lower().startswith("lnurl"):
@@ -282,11 +288,6 @@ async def api_get_asset_transactions(
     return await AssetService.get_asset_transactions(wallet, asset_id, limit)
 
 
-def clean_lnurl(lnurl_string: str) -> str:
-    """Clean LNURL by removing lightning: prefix if present."""
-    return lnurl_string.replace('lightning:', '') if lnurl_string.startswith('lightning:') else lnurl_string
-
-
 @taproot_assets_api_router.post("/lnurl/info", status_code=HTTPStatus.OK)
 @handle_api_error
 async def api_lnurl_info(
@@ -375,34 +376,48 @@ async def api_get_asset_rate(
         buy_order_response = await rfq_stub.AddAssetBuyOrder(buy_order_request, timeout=5)
         
         if buy_order_response.accepted_quote:
-            # Extract rate
-            rate_info = buy_order_response.accepted_quote.ask_asset_rate
             quote = buy_order_response.accepted_quote
+            rate_info = quote.ask_asset_rate
 
-            log_info(API, f"RFQ - Requested: {STANDARD_REQUEST_AMOUNT} base units")
-            log_info(API, f"RFQ - Oracle returned asset_max_amount: {quote.asset_max_amount}")
-            log_info(API, f"RFQ - coefficient: {rate_info.coefficient}")
-            log_info(API, f"RFQ - scale: {rate_info.scale}")
+            log_info(API, f"RFQ - Requested: {STANDARD_REQUEST_AMOUNT} base units (= 1 display unit)")
+            log_info(API, f"RFQ - Oracle confirmed: {quote.asset_max_amount} units")
+            log_info(API, f"RFQ - Raw coefficient: {rate_info.coefficient}, scale: {rate_info.scale}")
 
-            # Oracle coefficient is the total cost for asset_max_amount
-            oracle_coefficient = float(rate_info.coefficient)
-            # NOTE: Coefficient is in centisats (1/100 sat), not millisats!
-            total_centisats = oracle_coefficient / (10 ** rate_info.scale)
+            # ==========================================
+            # RFQ ORACLE QUIRK - READ THIS FIRST!
+            # ==========================================
+            # The oracle returns a FIXED BUDGET (not a rate!).
+            # We ALWAYS request exactly 1 display unit to get consistent pricing.
+            #
+            # Example for debug2coin (decimals=3):
+            #   Request: 1000 base units (= 1 display unit)
+            #   Oracle returns: coefficient=100000, scale=0
+            #
+            # The coefficient is in CENTISATS (NOT millisats!):
+            #   100000 centisats = 1000 sats
+            #
+            # Math breakdown:
+            #   1. Apply scale: 100000 / (10^0) = 100000 centisats
+            #   2. Convert to sats: 100000 / 100 = 1000 sats
+            #   3. Result: 1000 sats per display unit ✓
+            # ==========================================
 
-            log_info(API, f"RFQ - total_centisats: {total_centisats} for {quote.asset_max_amount} units")
+            # Step 1: Apply the scale factor (usually 0, so this is typically a no-op)
+            cost_in_centisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
 
-            # The coefficient represents the total cost for 1 display unit (STANDARD_REQUEST_AMOUNT base units)
-            # Convert centisats to sats for 1 display unit
-            rate_per_display_unit = total_centisats / 100
+            # Step 2: Convert centisats to sats
+            # CRITICAL: Coefficient is in centisats (1/100 sat), discovered through trial & error
+            cost_in_sats = cost_in_centisats / 100
 
-            log_info(API, f"RFQ - rate_per_display_unit: {rate_per_display_unit} sats (for 1 display unit = {STANDARD_REQUEST_AMOUNT} base units)")
+            log_info(API, f"RFQ - Calculated rate: {cost_in_sats} sats per display unit")
 
+            # This rate applies to 1 display unit (the amount we requested)
             return {
                 "asset_id": asset_id,
                 "amount": STANDARD_REQUEST_AMOUNT,
-                "rate_per_unit": rate_per_display_unit,
-                "total_sats": rate_per_display_unit,
-                "quote_id": buy_order_response.accepted_quote.id.hex(),
+                "rate_per_unit": cost_in_sats,
+                "total_sats": cost_in_sats,
+                "quote_id": quote.id.hex(),
                 "decimals": asset_decimals
             }
         else:
