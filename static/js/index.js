@@ -176,6 +176,18 @@ window.app = Vue.createApp({
       return AssetService.getAssetName(assetId);
     },
 
+    // Format display units (amounts already in display units from backend)
+    formatDisplayUnits(amount, asset) {
+      if (!asset) return amount || '0';
+      return DataUtils.formatAssetBalance(amount, asset.decimal_display || 0);
+    },
+
+    // Format base units (amounts in base units from LND channels)
+    formatBaseUnits(amount, asset) {
+      if (!asset) return amount || '0';
+      return DataUtils.formatChannelBalance(amount, asset.decimal_display || 0);
+    },
+
     // Check if a channel is active (used for styling)
     isChannelActive(asset) {
       return asset && asset.channel_info && asset.channel_info.active !== false;
