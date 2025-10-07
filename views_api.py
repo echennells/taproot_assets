@@ -377,28 +377,25 @@ async def api_get_asset_rate(
         if buy_order_response.accepted_quote:
             # Extract rate
             rate_info = buy_order_response.accepted_quote.ask_asset_rate
+            quote = buy_order_response.accepted_quote
 
+            log_info(API, f"RFQ - Requested: {STANDARD_REQUEST_AMOUNT} base units")
+            log_info(API, f"RFQ - Oracle returned asset_max_amount: {quote.asset_max_amount}")
             log_info(API, f"RFQ - coefficient: {rate_info.coefficient}")
             log_info(API, f"RFQ - scale: {rate_info.scale}")
 
-            # Oracle coefficient is the fixed budget
+            # Oracle coefficient is the total cost for asset_max_amount
             oracle_coefficient = float(rate_info.coefficient)
-            total_millisats = oracle_coefficient / (10 ** rate_info.scale)
+            # NOTE: Coefficient is in centisats (1/100 sat), not millisats!
+            total_centisats = oracle_coefficient / (10 ** rate_info.scale)
 
-            log_info(API, f"RFQ - total_millisats (fixed budget): {total_millisats}")
+            log_info(API, f"RFQ - total_centisats: {total_centisats} for {quote.asset_max_amount} units")
 
-            # Rate per base unit
-            sats_per_base_unit = (total_millisats / STANDARD_REQUEST_AMOUNT) / 1000
+            # The coefficient represents the total cost for 1 display unit (STANDARD_REQUEST_AMOUNT base units)
+            # Convert centisats to sats for 1 display unit
+            rate_per_display_unit = total_centisats / 100
 
-            log_info(API, f"RFQ - sats_per_base_unit: {sats_per_base_unit}")
-
-            # Convert to display units
-            if asset_decimals > 0:
-                rate_per_display_unit = sats_per_base_unit * (10 ** asset_decimals)
-                log_info(API, f"RFQ - rate_per_display_unit: {rate_per_display_unit} (×{10**asset_decimals})")
-            else:
-                rate_per_display_unit = sats_per_base_unit
-                log_info(API, f"RFQ - rate_per_display_unit: {rate_per_display_unit} (no decimals)")
+            log_info(API, f"RFQ - rate_per_display_unit: {rate_per_display_unit} sats (for 1 display unit = {STANDARD_REQUEST_AMOUNT} base units)")
 
             return {
                 "asset_id": asset_id,
