@@ -73,9 +73,9 @@
             <div class="asset-detail">
               <div class="row q-col-gutter-md">
                 <div class="col-12">
-                  <div>Balance: {% raw %}{{ asset.user_balance ? formatAssetAmount(asset.user_balance, asset) : formatChannelAmount(asset.channel_info?.local_balance, asset) }}{% endraw %}</div>
+                  <div>Balance: {% raw %}{{ asset.user_balance ? DataUtils.formatAssetBalance(asset.user_balance, asset.decimal_display || 0) : DataUtils.formatChannelBalance(asset.channel_info?.local_balance, asset.decimal_display || 0) }}{% endraw %}</div>
                   <div v-if="asset.channel_info && asset.channel_info.remote_balance !== undefined" class="text-positive">
-                    Max Receivable: {% raw %}{{ formatChannelAmount(asset.channel_info.remote_balance, asset) }}{% endraw %}
+                    Max Receivable: {% raw %}{{ DataUtils.formatChannelBalance(asset.channel_info.remote_balance, asset.decimal_display || 0) }}{% endraw %}
                   </div>
                   <div v-if="asset.channel_info && asset.channel_info.peer_alias" class="text-grey-7" style="font-size: 0.85em;">
                     Peer: {% raw %}{{ asset.channel_info.peer_alias }}{% endraw %}
@@ -187,7 +187,7 @@
                 <div class="ellipsis">{% raw %}{{ tx.memo || '' }}{% endraw %}</div>
               </td>
               <td class="amount-col text-right">
-                {% raw %}{{ formatAssetAmount(tx.asset_amount || tx.extra?.asset_amount || 0, assets.find(a => a.asset_id === (tx.asset_id || tx.extra?.asset_id))) }}{% endraw %}
+                {% raw %}{{ DataUtils.formatAssetBalance(tx.asset_amount || tx.extra?.asset_amount || 0, (assets.find(a => a.asset_id === (tx.asset_id || tx.extra?.asset_id))?.decimal_display || 0)) }}{% endraw %}
               </td>
             </tr>
           </tbody>
@@ -308,7 +308,7 @@
         <div class="text-center q-mt-md">
           <div class="text-subtitle1">
             <div class="q-mb-sm"><span class="text-bold">Asset:</span> {% raw %}{{ createdInvoice.asset_name || (invoiceDialog.selectedAsset ? invoiceDialog.selectedAsset.name : 'Unknown') }}{% endraw %}</div>
-            <div><span class="text-bold">Amount:</span> {% raw %}{{ formatAssetAmount(invoiceDialog.form.amount || createdInvoice.asset_amount, invoiceDialog.selectedAsset) }}{% endraw %}</div>
+            <div><span class="text-bold">Amount:</span> {% raw %}{{ DataUtils.formatAssetBalance(invoiceDialog.form.amount || createdInvoice.asset_amount, invoiceDialog.selectedAsset?.decimal_display || 0) }}{% endraw %}</div>
           </div>
         </div>
         
@@ -379,7 +379,7 @@
     <div v-else>
       <div class="column content-center text-center q-mb-md">
         <h4 class="q-my-none text-bold">
-          <span>{% raw %}{{ formatAssetAmount(parseDialog.invoice.amount, assets.find(a => a.asset_id === parseDialog.invoice.asset_id)) }}{% endraw %}</span>
+          <span>{% raw %}{{ DataUtils.formatAssetBalance(parseDialog.invoice.amount, (assets.find(a => a.asset_id === parseDialog.invoice.asset_id)?.decimal_display || 0)) }}{% endraw %}</span>
           <span class="text-subtitle1 q-ml-sm">{% raw %}{{ parseDialog.invoice.asset_info ? parseDialog.invoice.asset_info.asset_name : (getAssetNameFromId(parseDialog.invoice.asset_id) || 'Unknown Asset') }}{% endraw %}</span>
         </h4>
         <div v-if="parseDialog.invoice.is_lnurl" class="text-caption text-grey-7 q-mt-sm">
@@ -500,7 +500,7 @@
         
         <div class="row q-col-gutter-md q-mt-sm">
           <div class="col-12">
-            <div>Balance: {% raw %}{{ paymentDialog.selectedAsset.user_balance ? formatAssetAmount(paymentDialog.selectedAsset.user_balance, paymentDialog.selectedAsset) : formatChannelAmount(paymentDialog.selectedAsset.channel_info?.local_balance, paymentDialog.selectedAsset) }}{% endraw %}</div>
+            <div>Balance: {% raw %}{{ paymentDialog.selectedAsset.user_balance ? DataUtils.formatAssetBalance(paymentDialog.selectedAsset.user_balance, paymentDialog.selectedAsset.decimal_display || 0) : DataUtils.formatChannelBalance(paymentDialog.selectedAsset.channel_info?.local_balance, paymentDialog.selectedAsset.decimal_display || 0) }}{% endraw %}</div>
           </div>
         </div>
       </div>

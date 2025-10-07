@@ -99,19 +99,22 @@ const DataUtils = {
     const amount = typeof baseUnits === 'string' ? parseFloat(baseUnits) : baseUnits;
     if (isNaN(amount)) return '0';
 
+    // Cap decimal places at 2 maximum
+    const displayDecimals = Math.min(decimalDisplay, 2);
+
     // If no decimal places, just format with commas
-    if (decimalDisplay === 0) {
+    if (displayDecimals === 0) {
       return amount.toLocaleString();
     }
 
-    // Apply decimal places by dividing by 10^decimalDisplay
+    // Apply decimal places by dividing by 10^decimalDisplay (but display with capped decimals)
     const divisor = Math.pow(10, decimalDisplay);
     const displayAmount = amount / divisor;
 
-    // Format with proper decimal places and thousands separators
+    // Format with proper decimal places and thousands separators (capped at 2)
     return displayAmount.toLocaleString(undefined, {
-      minimumFractionDigits: decimalDisplay,
-      maximumFractionDigits: decimalDisplay
+      minimumFractionDigits: displayDecimals,
+      maximumFractionDigits: displayDecimals
     });
   },
 
@@ -129,14 +132,17 @@ const DataUtils = {
     const amount = typeof displayUnits === 'string' ? parseFloat(displayUnits) : displayUnits;
     if (isNaN(amount)) return '0';
 
+    // Cap decimal places at 2 maximum
+    const displayDecimals = Math.min(decimalDisplay, 2);
+
     // Just format with the appropriate decimal places (no conversion needed)
-    if (decimalDisplay === 0) {
+    if (displayDecimals === 0) {
       return amount.toLocaleString();
     }
 
     return amount.toLocaleString(undefined, {
-      minimumFractionDigits: decimalDisplay,
-      maximumFractionDigits: decimalDisplay
+      minimumFractionDigits: displayDecimals,
+      maximumFractionDigits: displayDecimals
     });
   },
   

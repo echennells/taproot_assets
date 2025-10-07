@@ -176,20 +176,6 @@ window.app = Vue.createApp({
       return AssetService.getAssetName(assetId);
     },
 
-    // Format asset amount that's already in display units (from backend)
-    formatAssetAmount(amount, asset) {
-      if (!asset) return amount || '0';
-      const decimalDisplay = asset.decimal_display || 0;
-      return DataUtils.formatAssetBalance(amount, decimalDisplay);
-    },
-
-    // Format channel balance from base units (from LND)
-    formatChannelAmount(amount, asset) {
-      if (!asset) return amount || '0';
-      const decimalDisplay = asset.decimal_display || 0;
-      return DataUtils.formatChannelBalance(amount, decimalDisplay);
-    },
-
     // Check if a channel is active (used for styling)
     isChannelActive(asset) {
       return asset && asset.channel_info && asset.channel_info.active !== false;
@@ -678,10 +664,6 @@ window.app = Vue.createApp({
           // Handle success action if present
           if (response.data.lnurl_success_action) {
             const action = response.data.lnurl_success_action;
-            // Skip message display to avoid redundant notifications
-            // if (action.tag === 'message') {
-            //   NotificationService.showInfo(action.message);
-            // } else
             if (action.tag === 'url') {
               window.open(action.url, '_blank');
             }

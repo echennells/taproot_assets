@@ -237,30 +237,8 @@ class TaprootAssetManager:
                             if not asset_id:
                                 continue
 
-                            # Extract decimal_display - handle both JSON (simple int) and protobuf (nested object) formats
-                            decimal_display = 0
-                            decimal_display_raw = asset.get("decimal_display")
-
-                            logger.info(f"DECIMAL DEBUG - Asset {asset_id[:16]}...: decimal_display_raw={decimal_display_raw}, type={type(decimal_display_raw)}")
-                            logger.info(f"DECIMAL DEBUG - Full asset keys: {list(asset.keys())}")
-                            logger.info(f"DECIMAL DEBUG - Full asset data: {asset}")
-
-                            if isinstance(decimal_display_raw, int):
-                                # JSON format: simple integer
-                                decimal_display = decimal_display_raw
-                                logger.info(f"DECIMAL DEBUG - Using JSON format: {decimal_display}")
-                            elif isinstance(decimal_display_raw, dict):
-                                # Protobuf format: nested object
-                                decimal_display = decimal_display_raw.get("decimal_display", 0)
-                                logger.info(f"DECIMAL DEBUG - Using protobuf format: {decimal_display}")
-                            elif hasattr(decimal_display_raw, 'decimal_display'):
-                                # Direct protobuf object
-                                decimal_display = decimal_display_raw.decimal_display
-                                logger.info(f"DECIMAL DEBUG - Using direct protobuf object: {decimal_display}")
-                            else:
-                                logger.info(f"DECIMAL DEBUG - No decimal_display found, defaulting to 0")
-
-                            logger.info(f"DECIMAL DEBUG - Final decimal_display value: {decimal_display}")
+                            # Extract decimal_display from asset
+                            decimal_display = asset.get("decimal_display", 0)
 
                             # Get balance info from local_assets
                             local_balance = 0
@@ -314,27 +292,8 @@ class TaprootAssetManager:
                             elif "asset_genesis" in asset_utxo and "name" in asset_utxo["asset_genesis"]:
                                 name = asset_utxo["asset_genesis"]["name"]
 
-                            # Extract decimal_display - handle both JSON (simple int) and protobuf (nested object) formats
-                            decimal_display = 0
-                            decimal_display_raw = asset.get("decimal_display")
-
-                            logger.info(f"DECIMAL DEBUG OLD FORMAT - Asset {asset_id[:16]}...: decimal_display_raw={decimal_display_raw}, type={type(decimal_display_raw)}")
-                            logger.info(f"DECIMAL DEBUG OLD FORMAT - Full asset keys: {list(asset.keys())}")
-
-                            if isinstance(decimal_display_raw, int):
-                                # JSON format: simple integer
-                                decimal_display = decimal_display_raw
-                                logger.info(f"DECIMAL DEBUG OLD FORMAT - Using JSON format: {decimal_display}")
-                            elif isinstance(decimal_display_raw, dict):
-                                # Protobuf format: nested object
-                                decimal_display = decimal_display_raw.get("decimal_display", 0)
-                                logger.info(f"DECIMAL DEBUG OLD FORMAT - Using protobuf format: {decimal_display}")
-                            elif hasattr(decimal_display_raw, 'decimal_display'):
-                                # Direct protobuf object
-                                decimal_display = decimal_display_raw.decimal_display
-                                logger.info(f"DECIMAL DEBUG OLD FORMAT - Using direct protobuf object: {decimal_display}")
-                            else:
-                                logger.info(f"DECIMAL DEBUG OLD FORMAT - No decimal_display found, defaulting to 0")
+                            # Extract decimal_display from asset
+                            decimal_display = asset.get("decimal_display", 0)
 
                             # Create asset info dictionary
                             asset_info = {
