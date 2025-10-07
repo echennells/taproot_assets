@@ -99,19 +99,20 @@ const DataUtils = {
     const amount = typeof baseUnits === 'string' ? parseFloat(baseUnits) : baseUnits;
     if (isNaN(amount)) return '0';
 
-    // Cap decimal places at 2 maximum
+    // Cap display formatting at 2 decimal places for cleaner UI
     const displayDecimals = Math.min(decimalDisplay, 2);
 
-    // If no decimal places, just format with commas
+    // Assets with no decimals don't need conversion (base units = display units)
     if (displayDecimals === 0) {
       return amount.toLocaleString();
     }
 
-    // Apply decimal places by dividing by 10^decimalDisplay (but display with capped decimals)
+    // Convert base units to display units using full decimal precision
+    // Example: 15000 base units / 10^3 = 15 display units
     const divisor = Math.pow(10, decimalDisplay);
     const displayAmount = amount / divisor;
 
-    // Format with proper decimal places and thousands separators (capped at 2)
+    // Format with capped decimal places (max 2) for display
     return displayAmount.toLocaleString(undefined, {
       minimumFractionDigits: displayDecimals,
       maximumFractionDigits: displayDecimals
@@ -132,14 +133,15 @@ const DataUtils = {
     const amount = typeof displayUnits === 'string' ? parseFloat(displayUnits) : displayUnits;
     if (isNaN(amount)) return '0';
 
-    // Cap decimal places at 2 maximum
+    // Cap display formatting at 2 decimal places for cleaner UI
     const displayDecimals = Math.min(decimalDisplay, 2);
 
-    // Just format with the appropriate decimal places (no conversion needed)
+    // No conversion needed - amount is already in display units
     if (displayDecimals === 0) {
       return amount.toLocaleString();
     }
 
+    // Format with capped decimal places (max 2) for display
     return amount.toLocaleString(undefined, {
       minimumFractionDigits: displayDecimals,
       maximumFractionDigits: displayDecimals
