@@ -101,7 +101,7 @@ class TaprootAssetManager:
             # Convert response assets to dictionary format
             assets = []
             for asset in response.assets:
-                # Extract decimal display value
+                # Extract decimal display value from protobuf DecimalDisplay object
                 decimal_display = 0
                 if hasattr(asset, 'decimal_display') and asset.decimal_display:
                     decimal_display = asset.decimal_display.decimal_display
