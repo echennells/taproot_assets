@@ -139,7 +139,10 @@ async def api_parse_invoice(
                         "amount": amount_msat,
                         "asset_id": selected_asset["asset_id"]
                     }
-                    
+
+                    # SECURITY: Validate callback URL from LNURL response to prevent SSRF
+                    check_callback_url(callback_url)
+
                     # Get the invoice
                     cb_resp = await client.get(callback_url, params=callback_params, timeout=10)
                     cb_data = cb_resp.json()
@@ -391,23 +394,23 @@ async def api_get_asset_rate(
             #
             # Example for debug2coin (decimals=3):
             #   Request: 1000 base units (= 1 display unit)
-            #   Oracle returns: coefficient=1000000, scale=0
+            #   Oracle returns: coefficient=100000, scale=0
             #
-            # The coefficient is in MILLISATS:
-            #   1000000 millisats = 1000 sats
+            # The coefficient is in CENTISATS (NOT millisats!):
+            #   100000 centisats = 1000 sats
             #
             # Math breakdown:
-            #   1. Apply scale: 1000000 / (10^0) = 1000000 millisats
-            #   2. Convert to sats: 1000000 / 1000 = 1000 sats
+            #   1. Apply scale: 100000 / (10^0) = 100000 centisats
+            #   2. Convert to sats: 100000 / 100 = 1000 sats
             #   3. Result: 1000 sats per display unit ✓
             # ==========================================
 
             # Step 1: Apply the scale factor (usually 0, so this is typically a no-op)
-            cost_in_millisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
+            cost_in_centisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
 
-            # Step 2: Convert millisats to sats
-            # CRITICAL: Coefficient is in millisats (1/1000 sat)
-            cost_in_sats = cost_in_millisats / 1000
+            # Step 2: Convert centisats to sats
+            # CRITICAL: Coefficient is in centisats (1/100 sat), discovered through trial & error
+            cost_in_sats = cost_in_centisats / 100
 
             log_info(API, f"RFQ - Calculated rate: {cost_in_sats} sats per display unit")
 
