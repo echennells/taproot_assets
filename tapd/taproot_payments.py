@@ -225,6 +225,11 @@ class TaprootPaymentManager:
                         log_error(PAYMENT, f"Payment failed due to insufficient channel balance: {str(e)}")
                         status = "failed"
                         raise Exception("Failed - Insufficient sats balance in channel")
+                    elif "payment failed: 5" in error_str:
+                        # Error code 5 indicates liquidity/routing issues (usually inbound liquidity)
+                        log_error(PAYMENT, f"Payment failed due to liquidity problem: {str(e)}")
+                        status = "failed"
+                        raise Exception("Payment Failed: Liquidity Problem")
                     elif "insufficient balance" in error_str or "no asset channel balance" in error_str:
                         # Other balance-related errors
                         log_error(PAYMENT, f"Payment failed due to insufficient balance: {str(e)}")

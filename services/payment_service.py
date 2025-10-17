@@ -390,8 +390,8 @@ class PaymentService:
             
             log_info(PAYMENT, f"Payment details: hash={payment_hash}, preimage={preimage}, fee={routing_fees_sats}")
             
-            # Use the client-provided asset_id for recording the payment
-            asset_id = data.asset_id if data.asset_id else ""
+            # Use the client-provided asset_id, or fall back to payment result
+            asset_id = data.asset_id if data.asset_id else payment_result.get("asset_id", "")
             log_info(PAYMENT, f"Using asset_id={asset_id} for recording payment")
             
             # Extract description from the parsed invoice

@@ -51,6 +51,19 @@ class InvoiceService:
             HTTPException: If invoice creation fails
         """
         logger.info(f"Creating invoice for asset_id={data.asset_id}, amount={data.amount}")
+
+        # DEBUG: Log all parameters from both direct UI and bitcoinswitch
+        logger.info(f"TAPROOT_ASSETS DEBUG: InvoiceService.create_invoice called")
+        logger.info(f"TAPROOT_ASSETS DEBUG: user_id={user_id}")
+        logger.info(f"TAPROOT_ASSETS DEBUG: wallet_id={wallet_id}")
+        logger.info(f"TAPROOT_ASSETS DEBUG: TaprootInvoiceRequest data:")
+        logger.info(f"TAPROOT_ASSETS DEBUG:   asset_id={data.asset_id}")
+        logger.info(f"TAPROOT_ASSETS DEBUG:   amount={data.amount} (type: {type(data.amount)})")
+        logger.info(f"TAPROOT_ASSETS DEBUG:   description='{data.description}'")
+        logger.info(f"TAPROOT_ASSETS DEBUG:   expiry={data.expiry}")
+        logger.info(f"TAPROOT_ASSETS DEBUG:   peer_pubkey={data.peer_pubkey}")
+        logger.info(f"TAPROOT_ASSETS DEBUG:   extra={data.extra}")
+
         with ErrorContext("create_invoice", API):
             # Create a wallet instance using the factory
             taproot_wallet = await TaprootAssetsFactory.create_wallet(

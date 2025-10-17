@@ -176,11 +176,23 @@ window.app = Vue.createApp({
       return AssetService.getAssetName(assetId);
     },
 
+    // Format display units (amounts already in display units from backend)
+    formatDisplayUnits(amount, asset) {
+      if (!asset) return amount || '0';
+      return DataUtils.formatAssetBalance(amount, asset.decimal_display || 0);
+    },
+
+    // Format base units (amounts in base units from LND channels)
+    formatBaseUnits(amount, asset) {
+      if (!asset) return amount || '0';
+      return DataUtils.formatChannelBalance(amount, asset.decimal_display || 0);
+    },
+
     // Check if a channel is active (used for styling)
     isChannelActive(asset) {
       return asset && asset.channel_info && asset.channel_info.active !== false;
     },
-    
+
     // Check if user can send this asset (has balance)
     canSendAsset(asset) {
       return AssetService.canSendAsset(asset);
@@ -584,7 +596,7 @@ window.app = Vue.createApp({
             const asset = this.assets.find(a => a.asset_id === parsedInvoice.asset_info.asset_id);
             if (asset) {
               this.paymentDialog.selectedAsset = asset;
-              NotificationService.showInfo(`LNURL Payment: ${parsedInvoice.amount} ${parsedInvoice.asset_info.asset_name}`);
+              // Removed popup notification - keep it clean
             }
           }
           
@@ -664,9 +676,7 @@ window.app = Vue.createApp({
           // Handle success action if present
           if (response.data.lnurl_success_action) {
             const action = response.data.lnurl_success_action;
-            if (action.tag === 'message') {
-              NotificationService.showInfo(action.message);
-            } else if (action.tag === 'url') {
+            if (action.tag === 'url') {
               window.open(action.url, '_blank');
             }
           }

@@ -86,16 +86,66 @@ const DataUtils = {
   },
   
   /**
-   * Format asset balance for display
-   * @param {number|string} balance - Balance to format
-   * @param {number} decimals - Number of decimal places
-   * @returns {string} - Formatted balance
+   * Format channel balance from base units to display units
+   * Used ONLY for channel balances (local_balance, remote_balance) from LND
+   * @param {number|string} baseUnits - Balance in base units from LND
+   * @param {number} decimalDisplay - Number of decimal places from asset definition
+   * @returns {string} - Formatted balance with proper decimal placement
    */
-  formatAssetBalance(balance, decimals = 0) {
-    if (balance === undefined || balance === null) return '0';
-    
-    const amount = typeof balance === 'string' ? parseFloat(balance) : balance;
-    return isNaN(amount) ? '0' : amount.toFixed(decimals);
+  formatChannelBalance(baseUnits, decimalDisplay = 0) {
+    if (baseUnits === undefined || baseUnits === null) return '0';
+
+    // Convert to number if string
+    const amount = typeof baseUnits === 'string' ? parseFloat(baseUnits) : baseUnits;
+    if (isNaN(amount)) return '0';
+
+    // Cap display formatting at 2 decimal places for cleaner UI
+    const displayDecimals = Math.min(decimalDisplay, 2);
+
+    // Assets with no decimals don't need conversion (base units = display units)
+    if (displayDecimals === 0) {
+      return amount.toLocaleString();
+    }
+
+    // Convert base units to display units using full decimal precision
+    // Example: 15000 base units / 10^3 = 15 display units
+    const divisor = Math.pow(10, decimalDisplay);
+    const displayAmount = amount / divisor;
+
+    // Format with capped decimal places (max 2) for display
+    return displayAmount.toLocaleString(undefined, {
+      minimumFractionDigits: displayDecimals,
+      maximumFractionDigits: displayDecimals
+    });
+  },
+
+  /**
+   * Format asset amount that's already in display units
+   * Used for amounts from backend (invoices, payments, balances)
+   * @param {number|string} displayUnits - Amount already in display units
+   * @param {number} decimalDisplay - Number of decimal places for formatting
+   * @returns {string} - Formatted amount with commas and proper decimals
+   */
+  formatAssetBalance(displayUnits, decimalDisplay = 0) {
+    if (displayUnits === undefined || displayUnits === null) return '0';
+
+    // Convert to number if string
+    const amount = typeof displayUnits === 'string' ? parseFloat(displayUnits) : displayUnits;
+    if (isNaN(amount)) return '0';
+
+    // Cap display formatting at 2 decimal places for cleaner UI
+    const displayDecimals = Math.min(decimalDisplay, 2);
+
+    // No conversion needed - amount is already in display units
+    if (displayDecimals === 0) {
+      return amount.toLocaleString();
+    }
+
+    // Format with capped decimal places (max 2) for display
+    return amount.toLocaleString(undefined, {
+      minimumFractionDigits: displayDecimals,
+      maximumFractionDigits: displayDecimals
+    });
   },
   
   /**
@@ -105,13 +155,35 @@ const DataUtils = {
    */
   parseAssetValue(value) {
     if (!value) return 0;
-    
+
     if (typeof value === 'string') {
       const cleanValue = value.replace(/[^0-9.]/g, '');
       return parseFloat(cleanValue) || 0;
     }
-    
+
     return typeof value === 'number' ? (isNaN(value) ? 0 : value) : 0;
+  },
+
+  /**
+   * Convert display amount to base units for API calls
+   * @param {number|string} displayAmount - Amount in display units (what user sees)
+   * @param {number} decimalDisplay - Number of decimal places from asset definition
+   * @returns {number} - Amount in base units (for API/backend)
+   */
+  convertToBaseUnits(displayAmount, decimalDisplay = 0) {
+    if (displayAmount === undefined || displayAmount === null) return 0;
+
+    const amount = typeof displayAmount === 'string' ? parseFloat(displayAmount) : displayAmount;
+    if (isNaN(amount)) return 0;
+
+    // If no decimal places, return as is
+    if (decimalDisplay === 0) {
+      return Math.round(amount);
+    }
+
+    // Multiply by 10^decimalDisplay to convert to base units
+    const multiplier = Math.pow(10, decimalDisplay);
+    return Math.round(amount * multiplier);
   },
   
   /**

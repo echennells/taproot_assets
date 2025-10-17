@@ -38,19 +38,37 @@ class TaprootInvoiceManager:
 
     async def create_asset_invoice(self, description: str, asset_id: str, asset_amount: int,
                                expiry: Optional[int] = None, peer_pubkey: Optional[str] = None) -> Dict[str, Any]:
-        """Create an invoice for a Taproot Asset transfer."""
+        """Create an invoice for a Taproot Asset transfer.
+
+        Args:
+            asset_amount: Amount in DISPLAY UNITS (will be converted to base units for RFQ)
+        """
         try:
-            logger.info(f"Creating asset invoice for asset_id={asset_id}, amount={asset_amount}")
-            
+            logger.info(f"Creating asset invoice for asset_id={asset_id}, amount={asset_amount} (display units)")
+
+            # Get asset decimal_display to convert display units -> base units
+            assets = await self.node.asset_manager.list_assets(force_refresh=False)
+            asset_decimals = 0
+            for asset in assets:
+                if asset.get("asset_id") == asset_id:
+                    asset_decimals = asset.get("decimal_display", 0)
+                    logger.info(f"Found asset with decimal_display={asset_decimals}")
+                    break
+
+            # Convert display units to base units for RFQ
+            # For 3 decimals: 2 display units = 2 * 1000 = 2000 base units
+            asset_amount_base_units = asset_amount * (10 ** asset_decimals)
+            logger.info(f"Converted {asset_amount} display units -> {asset_amount_base_units} base units (decimals={asset_decimals})")
+
             # Convert parameters to expected types
             asset_id_bytes = bytes.fromhex(asset_id)
             expiry_time = int(time.time()) + (expiry or 3600)
 
-            # Create buy order request
+            # Create buy order request with BASE UNITS
             rfq_stub = rfq_pb2_grpc.RfqStub(self.node.channel)
             buy_order_request = rfq_pb2.AddAssetBuyOrderRequest(
                 asset_specifier=rfq_pb2.AssetSpecifier(asset_id=asset_id_bytes),
-                asset_max_amt=asset_amount,
+                asset_max_amt=asset_amount_base_units,  # RFQ expects BASE UNITS
                 expiry=expiry_time,
                 timeout_seconds=5
             )

@@ -101,6 +101,11 @@ class TaprootAssetManager:
             # Convert response assets to dictionary format
             assets = []
             for asset in response.assets:
+                # Extract decimal display value from protobuf DecimalDisplay object
+                decimal_display = 0
+                if hasattr(asset, 'decimal_display') and asset.decimal_display:
+                    decimal_display = asset.decimal_display.decimal_display
+
                 assets.append({
                     "name": asset.asset_genesis.name.decode('utf-8') if isinstance(asset.asset_genesis.name, bytes) else asset.asset_genesis.name,
                     "asset_id": asset.asset_genesis.asset_id.hex() if isinstance(asset.asset_genesis.asset_id, bytes) else asset.asset_genesis.asset_id,
@@ -110,7 +115,8 @@ class TaprootAssetManager:
                     "meta_hash": asset.asset_genesis.meta_hash.hex() if isinstance(asset.asset_genesis.meta_hash, bytes) else asset.asset_genesis.meta_hash,
                     "version": str(asset.version),
                     "is_spent": asset.is_spent,
-                    "script_key": asset.script_key.hex() if isinstance(asset.script_key, bytes) else asset.script_key
+                    "script_key": asset.script_key.hex() if isinstance(asset.script_key, bytes) else asset.script_key,
+                    "decimal_display": decimal_display
                 })
 
             # Get channel assets
@@ -142,11 +148,11 @@ class TaprootAssetManager:
                 # Add each channel as a separate asset entry
                 for channel in channels:
                     asset_with_channel = base_asset.copy()
-                    
+
                     # Get node alias for the peer
                     peer_pubkey = channel["remote_pubkey"]
                     peer_alias = await self.get_node_alias(peer_pubkey)
-                    
+
                     asset_with_channel["channel_info"] = {
                         "channel_point": channel["channel_point"],
                         "capacity": channel["capacity"],
@@ -158,6 +164,8 @@ class TaprootAssetManager:
                         "active": channel.get("active", True)  # Add active status
                     }
                     asset_with_channel["amount"] = str(channel["local_balance"])
+                    # Add decimal_display from channel data to the asset object
+                    asset_with_channel["decimal_display"] = channel.get("decimal_display", 0)
                     result_assets.append(asset_with_channel)
             
             # We're not adding non-channel assets anymore, per the requirements
@@ -186,10 +194,11 @@ class TaprootAssetManager:
 
         Args:
             force_refresh: Whether to force a refresh from the node
-            
+
         Returns:
             A list of dictionaries containing channel and asset information.
         """
+        logger.info(f"CHANNEL DEBUG: list_channel_assets called with force_refresh={force_refresh}")
         # Check cache first if not forcing refresh
         if not force_refresh:
             cached_assets = cache.get(self.CHANNEL_ASSET_CACHE_KEY)
@@ -200,10 +209,13 @@ class TaprootAssetManager:
             request = lightning_pb2.ListChannelsRequest()
             response = await self.node.ln_stub.ListChannels(request, timeout=10)
 
+            logger.info(f"DEBUG: ListChannels returned {len(response.channels)} channels")
+
             channel_assets = []
 
             # Process each channel
-            for channel in response.channels:
+            for i, channel in enumerate(response.channels):
+                logger.info(f"DEBUG: Channel {i}: has_custom_data={hasattr(channel, 'custom_channel_data')}, data_length={len(channel.custom_channel_data) if hasattr(channel, 'custom_channel_data') and channel.custom_channel_data else 0}")
                 # Skip channels without custom_channel_data
                 if not hasattr(channel, 'custom_channel_data') or not channel.custom_channel_data:
                     continue
@@ -211,7 +223,9 @@ class TaprootAssetManager:
                 try:
                     # Parse JSON data
                     asset_data = json.loads(channel.custom_channel_data.decode('utf-8'))
-                    
+
+                    logger.info(f"DEBUG: Channel {i} asset_data keys: {list(asset_data.keys())}")
+
                     # Handle new v0.15.0 format with funding_assets
                     if "funding_assets" in asset_data:
                         # Process funding assets (contains full asset details)
@@ -219,24 +233,27 @@ class TaprootAssetManager:
                             asset_genesis = asset.get("asset_genesis", {})
                             asset_id = asset_genesis.get("asset_id", "")
                             name = asset_genesis.get("name", "")
-                            
+
                             if not asset_id:
                                 continue
-                            
+
+                            # Extract decimal_display from asset
+                            decimal_display = asset.get("decimal_display", 0)
+
                             # Get balance info from local_assets
                             local_balance = 0
                             for local_asset in asset_data.get("local_assets", []):
                                 if local_asset.get("asset_id") == asset_id:
                                     local_balance = local_asset.get("amount", 0)
                                     break
-                            
+
                             # Get remote balance
                             remote_balance = 0
                             for remote_asset in asset_data.get("remote_assets", []):
                                 if remote_asset.get("asset_id") == asset_id:
                                     remote_balance = remote_asset.get("amount", 0)
                                     break
-                            
+
                             asset_info = {
                                 "asset_id": asset_id,
                                 "name": name,
@@ -247,7 +264,8 @@ class TaprootAssetManager:
                                 "local_balance": local_balance,
                                 "remote_balance": remote_balance,
                                 "commitment_type": str(channel.commitment_type),
-                                "active": channel.active
+                                "active": channel.active,
+                                "decimal_display": decimal_display
                             }
                             channel_assets.append(asset_info)
                     
@@ -273,7 +291,10 @@ class TaprootAssetManager:
                                 name = asset_utxo["name"]
                             elif "asset_genesis" in asset_utxo and "name" in asset_utxo["asset_genesis"]:
                                 name = asset_utxo["asset_genesis"]["name"]
-                            
+
+                            # Extract decimal_display from asset
+                            decimal_display = asset.get("decimal_display", 0)
+
                             # Create asset info dictionary
                             asset_info = {
                                 "asset_id": asset_id,
@@ -285,7 +306,8 @@ class TaprootAssetManager:
                                 "local_balance": asset.get("local_balance", 0),
                                 "remote_balance": asset.get("remote_balance", 0),
                                 "commitment_type": str(channel.commitment_type),
-                                "active": channel.active  # Include active status from channel
+                                "active": channel.active,  # Include active status from channel
+                                "decimal_display": decimal_display
                             }
                             
                             channel_assets.append(asset_info)

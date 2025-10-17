@@ -22,6 +22,13 @@ from .services.lnurl_service import LnurlService
 taproot_assets_api_router = APIRouter(prefix="/api/v1/taproot", tags=["taproot_assets"])
 
 
+def clean_lnurl(lnurl_string: str) -> str:
+    """Clean LNURL by removing lightning: prefix if present (case-insensitive)."""
+    if lnurl_string.lower().startswith('lightning:'):
+        return lnurl_string[10:]  # Remove first 10 characters
+    return lnurl_string
+
+
 @taproot_assets_api_router.get("/parse-invoice", status_code=HTTPStatus.OK)
 @handle_api_error
 async def api_parse_invoice(
@@ -31,11 +38,14 @@ async def api_parse_invoice(
 ):
     """
     Parse a BOLT11 payment request or LNURL to extract invoice details for Taproot Assets.
-    
+
     If an LNURL is provided, it will fetch the invoice and parse it as a taproot asset invoice.
     """
     log_debug(API, f"Parsing payment request for wallet {wallet.wallet.id}")
-    
+
+    # Strip lightning: prefix if present
+    payment_request = clean_lnurl(payment_request)
+
     # Check if this is an LNURL (starts with "lnurl" case-insensitive)
     if payment_request.lower().startswith("lnurl"):
         log_info(API, "Detected LNURL, processing as taproot asset payment")
@@ -129,7 +139,10 @@ async def api_parse_invoice(
                         "amount": amount_msat,
                         "asset_id": selected_asset["asset_id"]
                     }
-                    
+
+                    # SECURITY: Validate callback URL from LNURL response to prevent SSRF
+                    check_callback_url(callback_url)
+
                     # Get the invoice
                     cb_resp = await client.get(callback_url, params=callback_params, timeout=10)
                     cb_data = cb_resp.json()
@@ -288,21 +301,27 @@ async def api_lnurl_info(
     Get information about an LNURL pay link, including asset support.
     """
     log_info(API, f"Getting LNURL info for wallet {wallet.wallet.id}")
-    return await LnurlService.check_lnurl_asset_support(data.lnurl)
+    clean_lnurl_string = clean_lnurl(data.lnurl)
+    return await LnurlService.check_lnurl_asset_support(clean_lnurl_string)
 
 
 @taproot_assets_api_router.get("/rate/{asset_id}", status_code=HTTPStatus.OK)
 @handle_api_error
 async def api_get_asset_rate(
     asset_id: str,
-    amount: int = Query(1, description="Amount to get rate for"),
+    amount: int = Query(1, description="Amount to get rate for (ignored, always uses 1)"),
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """
     Get current RFQ rate for an asset.
-    Returns the rate in sats per asset unit.
+
+    CRITICAL DISCOVERY: The oracle returns a FIXED BUDGET, not a market rate.
+    We MUST always request for exactly 1 base unit to get consistent rates,
+    regardless of the actual amount the user wants to transact.
+
+    Returns rate in sats per display unit.
     """
-    log_info(API, f"Getting rate for asset {asset_id}, amount={amount}")
+    log_info(API, f"Getting rate for asset {asset_id}")
     
     try:
         # Import required modules
@@ -318,25 +337,39 @@ async def api_get_asset_rate(
         # Get RFQ stub
         rfq_stub = rfq_pb2_grpc.RfqStub(taproot_wallet.node.channel)
         
-        # Find peer with asset channel
+        # Get assets and extract decimal info first
         assets = await AssetService.list_assets(wallet)
+
+        asset_decimals = 0
         peer_pubkey = None
-        
+
+        # Find asset info and peer for RFQ
         for asset in assets:
-            if asset.get("asset_id") == asset_id and asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
-                peer_pubkey = asset["channel_info"]["peer_pubkey"]
+            if asset.get("asset_id") == asset_id:
+                asset_decimals = asset.get("decimal_display", 0)
+                if asset.get("channel_info") and asset["channel_info"].get("peer_pubkey"):
+                    peer_pubkey = asset["channel_info"]["peer_pubkey"]
                 break
-        
+
         if not peer_pubkey:
-            return {
-                "error": "No peer found with channel for this asset",
-                "rate_per_unit": None
-            }
-        
+            return {"error": "No peer found with channel for this asset", "rate_per_unit": None}
+
+        # The mock oracle returns a fixed coefficient regardless of amount.
+        # We need to request a meaningful amount to get a usable rate.
+        # For assets with decimals, request 1 display unit worth of base units.
+        if asset_decimals > 0:
+            # For 3 decimals: request 1000 base units (= 1 display unit)
+            STANDARD_REQUEST_AMOUNT = 10 ** asset_decimals
+        else:
+            # For 0 decimals: 1 base unit = 1 display unit
+            STANDARD_REQUEST_AMOUNT = 1
+
+        log_info(API, f"RFQ - Requesting rate for {STANDARD_REQUEST_AMOUNT} base units (= 1 display unit, decimals={asset_decimals})")
+
         # Create buy order request
         buy_order_request = rfq_pb2.AddAssetBuyOrderRequest(
             asset_specifier=rfq_pb2.AssetSpecifier(asset_id=bytes.fromhex(asset_id)),
-            asset_max_amt=amount,
+            asset_max_amt=STANDARD_REQUEST_AMOUNT,
             expiry=int((datetime.now(timezone.utc) + timedelta(minutes=1)).timestamp()),
             timeout_seconds=5,
             peer_pub_key=bytes.fromhex(peer_pubkey)
@@ -346,17 +379,49 @@ async def api_get_asset_rate(
         buy_order_response = await rfq_stub.AddAssetBuyOrder(buy_order_request, timeout=5)
         
         if buy_order_response.accepted_quote:
-            # Extract rate
-            rate_info = buy_order_response.accepted_quote.ask_asset_rate
-            total_millisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
-            rate_per_unit = (total_millisats / amount) / 1000
-            
+            quote = buy_order_response.accepted_quote
+            rate_info = quote.ask_asset_rate
+
+            log_info(API, f"RFQ - Requested: {STANDARD_REQUEST_AMOUNT} base units (= 1 display unit)")
+            log_info(API, f"RFQ - Oracle confirmed: {quote.asset_max_amount} units")
+            log_info(API, f"RFQ - Raw coefficient: {rate_info.coefficient}, scale: {rate_info.scale}")
+
+            # ==========================================
+            # RFQ ORACLE QUIRK - READ THIS FIRST!
+            # ==========================================
+            # The oracle returns a FIXED BUDGET (not a rate!).
+            # We ALWAYS request exactly 1 display unit to get consistent pricing.
+            #
+            # Example for debug2coin (decimals=3):
+            #   Request: 1000 base units (= 1 display unit)
+            #   Oracle returns: coefficient=100000, scale=0
+            #
+            # The coefficient is in CENTISATS (NOT millisats!):
+            #   100000 centisats = 1000 sats
+            #
+            # Math breakdown:
+            #   1. Apply scale: 100000 / (10^0) = 100000 centisats
+            #   2. Convert to sats: 100000 / 100 = 1000 sats
+            #   3. Result: 1000 sats per display unit ✓
+            # ==========================================
+
+            # Step 1: Apply the scale factor (usually 0, so this is typically a no-op)
+            cost_in_centisats = float(rate_info.coefficient) / (10 ** rate_info.scale)
+
+            # Step 2: Convert centisats to sats
+            # CRITICAL: Coefficient is in centisats (1/100 sat), discovered through trial & error
+            cost_in_sats = cost_in_centisats / 100
+
+            log_info(API, f"RFQ - Calculated rate: {cost_in_sats} sats per display unit")
+
+            # This rate applies to 1 display unit (the amount we requested)
             return {
                 "asset_id": asset_id,
-                "amount": amount,
-                "rate_per_unit": rate_per_unit,
-                "total_sats": int(amount * rate_per_unit),
-                "quote_id": buy_order_response.accepted_quote.id.hex()
+                "amount": STANDARD_REQUEST_AMOUNT,
+                "rate_per_unit": cost_in_sats,
+                "total_sats": cost_in_sats,
+                "quote_id": quote.id.hex(),
+                "decimals": asset_decimals
             }
         else:
             return {
@@ -388,10 +453,11 @@ async def api_lnurl_pay(
     4. Pays the invoice using the Taproot Assets payment service
     """
     log_info(API, f"Processing LNURL payment for wallet {wallet.wallet.id}, amount={data.amount_msat} msat")
-    
-    # Process the LNURL payment
+
+    # Clean LNURL and process the payment
+    clean_lnurl_string = clean_lnurl(data.lnurl)
     payment_response = await LnurlService.pay_lnurl(
-        lnurl_string=data.lnurl,
+        lnurl_string=clean_lnurl_string,
         amount_msat=data.amount_msat,
         wallet_info=wallet,
         comment=data.comment,
