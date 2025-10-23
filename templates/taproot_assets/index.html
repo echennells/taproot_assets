@@ -73,7 +73,10 @@
             <div class="asset-detail">
               <div class="row q-col-gutter-md">
                 <div class="col-12">
-                  <div>Balance: {% raw %}{{ asset.user_balance ? formatDisplayUnits(asset.user_balance, asset) : formatBaseUnits(asset.channel_info?.local_balance, asset) }}{% endraw %}</div>
+                  <div>Balance: {% raw %}{{ formatDisplayUnits(asset.user_balance || 0, asset) }}{% endraw %}</div>
+                  <div v-if="asset.channel_info && asset.channel_info.local_balance !== undefined" class="text-grey-7" style="font-size: 0.85em;">
+                    Channel: {% raw %}{{ formatBaseUnits(asset.channel_info.local_balance, asset) }}{% endraw %}
+                  </div>
                   <div v-if="asset.channel_info && asset.channel_info.remote_balance !== undefined" class="text-positive">
                     Max Receivable: {% raw %}{{ formatBaseUnits(asset.channel_info.remote_balance, asset) }}{% endraw %}
                   </div>
