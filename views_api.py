@@ -291,6 +291,22 @@ async def api_get_asset_transactions(
     return await AssetService.get_asset_transactions(wallet, asset_id, limit)
 
 
+@taproot_assets_api_router.post("/sync-balances", status_code=HTTPStatus.OK)
+@handle_api_error
+async def api_sync_balances(
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+):
+    """
+    Sync LNbits asset balances with actual tapd channel balances.
+
+    This will compare the internal LNbits balance tracking with the actual
+    asset balances in tapd channels, and create adjustment transactions
+    to reconcile any differences.
+    """
+    log_info(API, f"Syncing asset balances for wallet {wallet.wallet.id}")
+    return await AssetService.sync_balances_with_tapd(wallet)
+
+
 @taproot_assets_api_router.post("/lnurl/info", status_code=HTTPStatus.OK)
 @handle_api_error
 async def api_lnurl_info(
